@@ -3,11 +3,13 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <pthread.h>
 
 #define PORT            8080
 #define MESSAGE_SIZE    4096
 #define PROTOCOL        0
 
+#define NUM_THREADS     2
 
 using namespace std;
 
@@ -17,8 +19,59 @@ void errorMsg(const char *msg){
     exit(1);
 }
 
-int main(int argc, char const *argv[]){
+void quit(int sock, int server_fd) {
+    close(sock);
+    close(server_fd);
+    exit(0);
+}
 
+void *receiveMsg(void *info){
+    int n;
+    char buffer[MESSAGE_SIZE];
+    int sock = ((int *)info)[0];
+    int server_fd = ((int *)info)[1];
+
+    while(true) {
+        // Receives message
+        bzero(buffer, MESSAGE_SIZE);
+        n = recv(sock, buffer, MESSAGE_SIZE, 0);
+        if(n <= 0) errorMsg("ERROR reading from socket");
+
+        // If receives the quit command, closes server and quit
+        if (!strcmp(buffer, "/quit\n")) {
+            cout << "Quitting";
+            quit(sock, server_fd);
+        }
+
+        cout << "Incoming >> " << buffer; 
+    }
+}
+
+void *sendMsg(void *info) {
+    int n;
+    char buffer[MESSAGE_SIZE];
+
+    int sock = ((int *)info)[0];
+    int server_fd = ((int *)info)[1];
+
+    while(true){
+        // Gets input
+        bzero(buffer, MESSAGE_SIZE);
+        fgets(buffer, MESSAGE_SIZE, stdin);
+
+        // Sends message
+        n = send(sock, buffer, strlen(buffer), MSG_DONTWAIT);
+        if(n < 0) errorMsg("ERROR writing to socket");
+
+        // If receives the quit command, closes server and quit
+        if (!strcmp(buffer, "/quit\n")) {
+            cout << "Quitting";
+            quit(sock, server_fd);
+        }
+    }
+}
+
+int main(int argc, char const *argv[]){
     int server_fd , new_socket, n;
     int opt = 1;
     struct sockaddr_in serv_addr;
@@ -59,23 +112,17 @@ int main(int argc, char const *argv[]){
         errorMsg("accept ERROR");
     }
 
-    //loop comunication with the client
-    while(true){
-        //receives message
-        bzero(buffer, MESSAGE_SIZE);
-        n = recv(new_socket, buffer, MESSAGE_SIZE, 0);
-        if(n < 0) errorMsg("ERROR reading from socket");
-        cout << buffer << "\n";
+    // Array with the informations that will be passed as argument to threads
+    int info[2] = { new_socket, server_fd };
 
-        //sends message
-        cout << "Please enter the message: ";
-        bzero(buffer, MESSAGE_SIZE);
-        fgets(buffer, MESSAGE_SIZE, stdin);
-        n = send(new_socket, buffer, strlen(buffer), 0);
-        if(n < 0) errorMsg("ERROR writing to socket");
-    }
+    // Creates 2 threads. One used to receive messages, and other to send messages.
+    pthread_t threads[NUM_THREADS]; 
 
-    close(server_fd);
-    close(new_socket);
+    pthread_create(&threads[0], NULL, receiveMsg, info);
+    pthread_create(&threads[1], NULL, sendMsg, info);
+
+    // Keeps threads running
+    while (true);
+    
     return 0;
 }

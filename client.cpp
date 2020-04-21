@@ -1,20 +1,71 @@
 #include <iostream>
+#include <string>
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <pthread.h>
 
 #define PORT            8080
 #define MESSAGE_SIZE    4096
 #define PROTOCOL        0
+
+#define NUM_THREADS     2
 
 using namespace std;
 
 //Shows error message and exit
 void errorMsg(const char *msg){
     perror(msg);
+    exit(1);
+}
+
+void quit(int sock) {
+    close(sock);
     exit(0);
 }
+
+void *receiveMsg(void *sock){
+    int n;
+    char buffer[MESSAGE_SIZE];
+
+    while(true) {
+        // Receives message
+        bzero(buffer, MESSAGE_SIZE);
+        n = recv(*(int *)sock, buffer, MESSAGE_SIZE, 0);
+        if(n <= 0) errorMsg("ERROR reading from socket");
+
+        // Quits if receive quit message
+        if (!strcmp(buffer, "/quit\n")) {
+            cout << "Quitting";
+            quit(*(int *)sock);
+        }
+
+        cout << "Incoming >> " << buffer; 
+    }
+}
+
+void *sendMsg(void *sock) {
+    int n;
+    char buffer[MESSAGE_SIZE];
+
+    while(true){
+        // Gets input
+        bzero(buffer, MESSAGE_SIZE);
+        fgets(buffer, MESSAGE_SIZE, stdin);
+
+        // Sends message
+        n = send(*(int *)sock, buffer, strlen(buffer), MSG_DONTWAIT);
+        if(n < 0) errorMsg("ERROR writing to socket");
+
+        // Quits if receive quit message
+        if (!strcmp(buffer, "/quit\n")) {
+            cout << "Quitting";
+            quit(*(int *)sock);
+        }
+    }
+}
+
 
 int main(int argc, char const *argv[]){
     int sock = 0;
@@ -47,22 +98,14 @@ int main(int argc, char const *argv[]){
         return -1;
     }
     
-    //loop comunication with the client
-    while(true){
-        //Sends message
-        cout << "Please enter the message: ";
-        bzero(buffer, MESSAGE_SIZE);
-        fgets(buffer, MESSAGE_SIZE, stdin);
-        n = send(sock, buffer, strlen(buffer), 0);
-        if(n < 0) errorMsg("ERROR writing to socket");
+    // Creates 2 threads. One used to receive messages, and other to send messages.
+    pthread_t threads[NUM_THREADS];
+    
+    pthread_create(&threads[1], NULL, sendMsg, &sock);
+    pthread_create(&threads[0], NULL, receiveMsg, &sock);
 
-        //receives message
-        bzero(buffer, MESSAGE_SIZE);
-        n = recv(sock, buffer, MESSAGE_SIZE, 0);
-        if(n < 0) errorMsg("ERROR reading from socket");
-        cout << buffer << "\n";
-    }
-
-    close(sock);
+    // Keeps threads running
+    while (true);
+    
     return 0;
 }
