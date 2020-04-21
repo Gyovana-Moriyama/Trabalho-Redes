@@ -16,8 +16,7 @@ void errorMsg(const char *msg){
     exit(0);
 }
 
-int main(int argc, char const *argv[])
-{
+int main(int argc, char const *argv[]){
     int sock = 0;
     int n;
     struct sockaddr_in serv_addr;
@@ -49,7 +48,7 @@ int main(int argc, char const *argv[])
     }
     
     //loop comunication with the client
-    while (1){
+    while(true){
         //Sends message
         cout << "Please enter the message: ";
         bzero(buffer, MESSAGE_SIZE);
@@ -62,10 +61,7 @@ int main(int argc, char const *argv[])
         n = recv(sock, buffer, MESSAGE_SIZE, 0);
         if(n < 0) errorMsg("ERROR reading from socket");
         cout << buffer << "\n";
-           
     }
-    
-
 
     close(sock);
     return 0;

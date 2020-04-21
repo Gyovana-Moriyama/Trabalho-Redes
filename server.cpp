@@ -14,7 +14,7 @@ using namespace std;
 //Shows error message and exit
 void errorMsg(const char *msg){
     perror(msg);
-    exit(0);
+    exit(1);
 }
 
 int main(int argc, char const *argv[]){
@@ -27,14 +27,12 @@ int main(int argc, char const *argv[]){
 
     //Create socket file descriptor
     if((server_fd = socket(AF_INET, SOCK_STREAM, PROTOCOL)) < 0){
-        perror("Socket failed.");
-        exit(EXIT_FAILURE);
+        errorMsg("Socket failed.");
     }
 
     //Forcefully attaching socket to the port 8080
     if(setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))){
-        perror("setsockopt");
-        exit(EXIT_FAILURE);
+        errorMsg("setsockopt");
     }
 
     //setup the host_addr structure for use in bind call
@@ -46,26 +44,23 @@ int main(int argc, char const *argv[]){
     serv_addr.sin_port = htons(PORT); 
 
     //Bind the socket to the current IP address on port
-    if(bind(server_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr))<0){
-        perror("bind failed");
-        exit(EXIT_FAILURE);
+    if(bind(server_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
+        errorMsg("bind failed");
     }
 
     //Tells the socket to listen to the incoming connections
     //maximum size for the backlog queue is 5
     if(listen(server_fd, 5) < 0){
-        perror("listen");
-        exit(EXIT_FAILURE);
+        errorMsg("listen");
     }
 
     //Actually accepts an incoming connection
-    if((new_socket = accept(server_fd, (struct sockaddr *)&serv_addr, (socklen_t*)&addrlen))<0){
-        perror("accept ERROR");
-        exit(EXIT_FAILURE);
+    if((new_socket = accept(server_fd, (struct sockaddr *)&serv_addr, (socklen_t*)&addrlen)) < 0){
+        errorMsg("accept ERROR");
     }
 
     //loop comunication with the client
-    while (1){
+    while(true){
         //receives message
         bzero(buffer, MESSAGE_SIZE);
         n = recv(new_socket, buffer, MESSAGE_SIZE, 0);
@@ -78,12 +73,9 @@ int main(int argc, char const *argv[]){
         fgets(buffer, MESSAGE_SIZE, stdin);
         n = send(new_socket, buffer, strlen(buffer), 0);
         if(n < 0) errorMsg("ERROR writing to socket");
-        
     }
-
 
     close(server_fd);
     close(new_socket);
     return 0;
-
 }
