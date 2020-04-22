@@ -1,6 +1,7 @@
 #include <iostream>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <string>
 #include <string.h>
 #include <sys/socket.h>
 #include <pthread.h>
@@ -43,30 +44,41 @@ void *receiveMsg(void *info){
             quit(sock, server_fd);
         }
 
-        cout << "Incoming >> " << buffer; 
+        cout << "Incoming >> " << buffer << "\n"; 
     }
 }
 
 void *sendMsg(void *info) {
     int n;
     char buffer[MESSAGE_SIZE];
+    string message;
 
     int sock = ((int *)info)[0];
     int server_fd = ((int *)info)[1];
 
     while(true){
         // Gets input
-        bzero(buffer, MESSAGE_SIZE);
-        fgets(buffer, MESSAGE_SIZE, stdin);
+        getline(cin, message);
 
-        // Sends message
-        n = send(sock, buffer, strlen(buffer), MSG_DONTWAIT);
-        if(n < 0) errorMsg("ERROR writing to socket");
+        // Calculates how many parts the message will be divided into
+        int div = (message.length() > MESSAGE_SIZE) ? (message.length()/MESSAGE_SIZE) : 0;
 
-        // If receives the quit command, closes server and quit
-        if (!strcmp(buffer, "/quit\n")) {
-            cout << "Quitting";
-            quit(sock, server_fd);
+        for(int i=0; i<=div; i++) {
+            // Clear buffer
+            bzero(buffer, MESSAGE_SIZE);
+
+            // Copy message limited by MESSAGE_SIZE
+            message.copy(buffer, MESSAGE_SIZE, i*MESSAGE_SIZE);
+
+            // Sends message
+            n = send(sock, buffer, strlen(buffer), MSG_DONTWAIT);
+            if(n < 0) errorMsg("ERROR writing to socket");
+
+            // Quits if receive quit message
+            if (!strcmp(buffer, "/quit")) {
+                cout << "Quitting";
+                quit(sock, server_fd);
+            }
         }
     }
 }

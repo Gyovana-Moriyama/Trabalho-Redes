@@ -41,27 +41,38 @@ void *receiveMsg(void *sock){
             quit(*(int *)sock);
         }
 
-        cout << "Incoming >> " << buffer; 
+        cout << "Incoming >> " << buffer << "\n"; ; 
     }
 }
 
 void *sendMsg(void *sock) {
     int n;
     char buffer[MESSAGE_SIZE];
+    string message;
 
     while(true){
         // Gets input
-        bzero(buffer, MESSAGE_SIZE);
-        fgets(buffer, MESSAGE_SIZE, stdin);
+        getline(cin, message);
 
-        // Sends message
-        n = send(*(int *)sock, buffer, strlen(buffer), MSG_DONTWAIT);
-        if(n < 0) errorMsg("ERROR writing to socket");
+        // Calculates how many parts the message will be divided into
+        int div = (message.length() > MESSAGE_SIZE) ? (message.length()/MESSAGE_SIZE) : 0;
 
-        // Quits if receive quit message
-        if (!strcmp(buffer, "/quit\n")) {
-            cout << "Quitting";
-            quit(*(int *)sock);
+        for(int i=0; i<=div; i++) {
+            // Clear buffer
+            bzero(buffer, MESSAGE_SIZE);
+
+            // Copy message limited by MESSAGE_SIZE
+            message.copy(buffer, MESSAGE_SIZE, i*MESSAGE_SIZE);
+
+            // Sends message
+            n = send(*(int *)sock, buffer, strlen(buffer), MSG_DONTWAIT);
+            if(n < 0) errorMsg("ERROR writing to socket");
+
+            // Quits if receive quit message
+            if (!strcmp(buffer, "/quit")) {
+                cout << "Quitting";
+                quit(*(int *)sock);
+            }
         }
     }
 }
