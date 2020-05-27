@@ -154,7 +154,7 @@ void *clientHandler(void *info)
         //if client sent /ping, the server answers with pong
         else if (!strcmp(recvBuffer, "/ping"))
         {
-            sprintf(sendBuffer, "Server: pong");
+            sprintf(sendBuffer, "Server: pong\n");
             pong(node, sendBuffer);
         }
         else

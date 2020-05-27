@@ -211,56 +211,64 @@ int main(int argc, char const *argv[])
     }
     
     //commands menu
-    //!botar num while pra pegar smp;
     cout << "Connect: /connect\nQuit: /quit\nPing: /ping\n";
-    if (fgets(buffer, 12, stdin) != NULL)
+    bool connected = false;
+    while (!connected)
     {
-        str_trim(buffer, '\0');
+        if (fgets(buffer, 12, stdin) != NULL)
+        {
+            str_trim(buffer, '\0');
+        }
+
+        // sets 'connected' flag to true and exits loop
+        if (!strcmp(buffer, "/connect"))
+            connected = true;
+        //quits without connect to server
+        else if(!strcmp(buffer, "/quit"))
+        {
+            cout << "Quitting\n";
+            quit(sock);
+        }
+        //can't do /ping if is no connected to server
+        else if(!strcmp(buffer, "/ping"))
+            cout << "/ping can only be used after connecting to server.\n";
+        else 
+            cout << "Unknown command" << endl;
     }
 
     //Connects to server
-    if (!strcmp(buffer, "/connect"))
+    if (connect(sock, (struct sockaddr *)&server_addr, s_addrlen) < 0)
     {
-        if (connect(sock, (struct sockaddr *)&server_addr, s_addrlen) < 0)
-        {
-            cout << "\nConnection failed\n";
-            return -1;
-        }
-
-        //Names
-        getsockname(sock, (struct sockaddr *)&client_addr, (socklen_t *)&c_addrlen);
-        getsockname(sock, (struct sockaddr *)&server_addr, (socklen_t *)&s_addrlen);
-        cout << "Connect to Server: " << inet_ntoa(server_addr.sin_addr) << ": " << ntohs(server_addr.sin_port) << "\n";
-        cout << "You are: " << inet_ntoa(client_addr.sin_addr) << ": " << ntohs(client_addr.sin_port) << "\n";
-
-        send(sock, nickname, NICKNAME_SIZE, 0);
-
-        pthread_t recvMsgThread;
-        if (pthread_create(&recvMsgThread, NULL, receiveMsgHandler, &sock) != 0)
-        {
-            cout << "Create pthread error\n";
-            return -1;
-        }
-
-        pthread_t sendMsgThread;
-        if (pthread_create(&sendMsgThread, NULL, sendMsgHandler, &sock) != 0)
-        {
-            cout << "Create pthread error";
-        }
-        // // Creates 2 threads. One used to receive messages, and other to send messages.
-        // pthread_t threads[NUM_THREADS];
-
-        // pthread_create(&threads[1], NULL, sendMsg, &sock);
-        // pthread_create(&threads[0], NULL, receiveMsg, &sock);
+        cout << "\nConnection failed\n";
+        return -1;
     }
-    //quits without connect to server
-    else if(!strcmp(buffer, "/quit")){
-        cout << "Quitting\n";
-        quit(sock);
+
+    //Names
+    getsockname(sock, (struct sockaddr *)&client_addr, (socklen_t *)&c_addrlen);
+    getsockname(sock, (struct sockaddr *)&server_addr, (socklen_t *)&s_addrlen);
+    cout << "Connect to Server: " << inet_ntoa(server_addr.sin_addr) << ": " << ntohs(server_addr.sin_port) << "\n";
+    cout << "You are: " << inet_ntoa(client_addr.sin_addr) << ": " << ntohs(client_addr.sin_port) << "\n";
+
+    send(sock, nickname, NICKNAME_SIZE, 0);
+
+    pthread_t recvMsgThread;
+    if (pthread_create(&recvMsgThread, NULL, receiveMsgHandler, &sock) != 0)
+    {
+        cout << "Create pthread error\n";
+        return -1;
     }
-    //can't do /ping if is no connected to server
-    else if(!strcmp(buffer, "/ping"))
-        cout << "/ping can only be used after connecting to server.\n";
+
+    pthread_t sendMsgThread;
+    if (pthread_create(&sendMsgThread, NULL, sendMsgHandler, &sock) != 0)
+    {
+        cout << "Create pthread error";
+    }
+    // // Creates 2 threads. One used to receive messages, and other to send messages.
+    // pthread_t threads[NUM_THREADS];
+
+    // pthread_create(&threads[1], NULL, sendMsg, &sock);
+    // pthread_create(&threads[0], NULL, receiveMsg, &sock);
+    
     // Keeps threads running
     while (true);
 
