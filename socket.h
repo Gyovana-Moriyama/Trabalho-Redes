@@ -5,7 +5,7 @@
 #define PROTOCOL        0
 
 #define MESSAGE_SIZE    2049
-#define NICKNAME_SIZE   31
+#define NICKNAME_SIZE   10
 
 
 #define NUM_THREADS     2

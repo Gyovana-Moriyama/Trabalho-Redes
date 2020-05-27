@@ -52,7 +52,7 @@ void str_trim(char *str, char newchar)
 //Prints the received message
 void *receiveMsgHandler(void *sock)
 {
-    char buffer[MESSAGE_SIZE] = {};
+    char buffer[MESSAGE_SIZE + NICKNAME_SIZE + 2] = {};
     int rcv;
     while (true)
     {
@@ -164,7 +164,7 @@ int main(int argc, char const *argv[])
     int s_addrlen = sizeof(server_addr);
     int c_addrlen = sizeof(client_addr);
     int sock = 0;
-    char nickname[NICKNAME_SIZE] = {};
+    char nickname[MESSAGE_SIZE] = {};
     char buffer[12] = {};
 
     signal(SIGINT, ctrl_c_handler);
@@ -173,18 +173,15 @@ int main(int argc, char const *argv[])
     char ip[10] = "127.0.0.1";
 
     //Get nickname
-    cout << "Please enter your nickname: ";
-    if (fgets(nickname, NICKNAME_SIZE - 1, stdin) != NULL)
+    do
     {
-        str_trim(nickname, '\0');
-    }
-
-    if (strlen(nickname) < 2 || strlen(nickname) > NICKNAME_SIZE - 1)
-    {
-        cout << "\nNickname must be more than one and less than thirty characteres.\n";
-        return -1;
-    }
-
+        cout << "Please enter your nickname (1~9 characters): ";
+        if (fgets(nickname, MESSAGE_SIZE - 1, stdin) != NULL)
+        {
+            str_trim(nickname, '\0');
+        }
+    } while (strlen(nickname) < 1 || strlen(nickname) > NICKNAME_SIZE - 1);
+    
     //Create socket file descriptor
     if ((sock = socket(AF_INET, SOCK_STREAM, PROTOCOL)) < 0)
     {

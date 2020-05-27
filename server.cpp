@@ -29,21 +29,23 @@ void errorMsg(const char *msg)
 }
 
 //Closes the server
-//!Tem que implementar sair do server
 void *quitHandler(void *rootNode)
 {
     while (true)
     {
-        string input;
+        char input[MESSAGE_SIZE];
         cin >> input;
 
-        if (input.compare("/quit") == 0)
+        if (!strcmp(input, "/quit"))
         {
             ClientList *root = (ClientList *)rootNode;
             ClientList *tmp;
+            char quitMessage[MESSAGE_SIZE] = "Server lost connection";
             while (root != NULL)
             {
+                //TODO
                 cout << "\nClose socketfd: " << root->data << endl;
+                send(root->data, quitMessage, MESSAGE_SIZE, 0);
                 close(root->data);
                 tmp = root;
                 root = root->next;
@@ -59,7 +61,6 @@ void *quitHandler(void *rootNode)
     }
 }
 
-//!Sla o que eu faço com o handler de CRTL + C
 void ctrl_c_handler(int sig)
 {
     cout << "To exit use /quit" << endl;
@@ -79,7 +80,7 @@ ClientList *createNewNode(int server_fd, char *ip)
 }
 
 //Send the message to all clients
-void sendAllClients(ClientList *root, ClientList *node, char tmpBuffer[])
+void sendAllClients(ClientList *root, ClientList *node, char message[])
 {
     ClientList *tmp = root->next;
     while (tmp != NULL)
@@ -87,17 +88,17 @@ void sendAllClients(ClientList *root, ClientList *node, char tmpBuffer[])
         //sends the message to all clients except itself
         if (node->data != tmp->data)
         {
-            cout << "Send to: " << tmp->name << ">> " << tmpBuffer;
-            send(tmp->data, tmpBuffer, MESSAGE_SIZE, 0);
+            cout << "Send to: " << tmp->name << ">> " << message;
+            send(tmp->data, message, MESSAGE_SIZE, 0);
         }
         tmp = tmp->next;
     }
 }
 
 //Sends pong to the client that sent /ping
-void pong(ClientList *node, char tmpBuffer[])
+void pong(ClientList *node, char message[])
 {
-    send(node->data, tmpBuffer, MESSAGE_SIZE, 0);
+    send(node->data, message, MESSAGE_SIZE, 0);
 }
 
 //Handles the client
@@ -106,7 +107,7 @@ void *clientHandler(void *info)
     int leave_flag = 0;
     char nickname[NICKNAME_SIZE] = {};
     char recvBuffer[MESSAGE_SIZE] = {};
-    char sendBuffer[MESSAGE_SIZE] = {};
+    char sendBuffer[MESSAGE_SIZE + NICKNAME_SIZE + 2] = {};
     ClientList *root = ((ClientList **)info)[0];
     ClientList *node = ((ClientList **)info)[1];
     ClientList *now = ((ClientList **)info)[2];
@@ -122,8 +123,8 @@ void *clientHandler(void *info)
         strcpy(node->name, nickname);
         cout << node->name << "(" << node->ip << ")"
              << "(" << node->data << ")"
-             << " join the chatroom.\n";
-        sprintf(sendBuffer, "%s join the chatroom.\n", node->name);
+             << " joined the chatroom.\n";
+        sprintf(sendBuffer, "%s joined the chatroom.\n", node->name);
         sendAllClients(root, node, sendBuffer);
     }
 
@@ -146,8 +147,8 @@ void *clientHandler(void *info)
         {
             cout << node->name << "(" << node->ip << ")"
                  << "(" << node->data << ")"
-                 << " leave the chatroom.\n";
-            sprintf(sendBuffer, "%s leave the chatroom.\n", node->name);
+                 << " left the chatroom.\n";
+            sprintf(sendBuffer, "%s left the chatroom.\n", node->name);
             sendAllClients(root, node, sendBuffer);
             leave_flag = 1;
         }
