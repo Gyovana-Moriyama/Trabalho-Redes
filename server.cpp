@@ -6,7 +6,7 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <signal.h>
-#include "../socket.h"
+#include "socket.h"
 
 using namespace std;
 
@@ -30,25 +30,39 @@ void errorMsg(const char *msg)
 
 //Closes the server
 //!Tem que implementar sair do server
-void quitHandler(ClientList *root)
+void *quitHandler(void *rootNode)
 {
-    ClientList *tmp;
-    while (root != NULL)
+    while (true)
     {
-        cout << "\nClose socketfd: " << root->data;
-        close(root->data);
-        tmp = root;
-        root = root->next;
-        free(tmp);
+        string input;
+        cin >> input;
+
+        if (input.compare("/quit") == 0)
+        {
+            ClientList *root = (ClientList *)rootNode;
+            ClientList *tmp;
+            while (root != NULL)
+            {
+                cout << "\nClose socketfd: " << root->data << endl;
+                close(root->data);
+                tmp = root;
+                root = root->next;
+                free(tmp);
+            }
+            cout << "Closing server...\n";
+            exit(0);
+        }
+        else
+        {
+            cout << "Unknown command\n" << "\tCommand List:\nQuit: /quit\n";
+        }
     }
-    cout << "Closing server...";
-    exit(0);
 }
 
 //!Sla o que eu faço com o handler de CRTL + C
 void ctrl_c_handler(int sig)
 {
-    cout << "To exit use /quit";
+    cout << "To exit use /quit" << endl;
 }
 
 //Creates a new node
@@ -289,6 +303,13 @@ int main(int argc, char const *argv[])
     //Initial linked list for clients
     ClientList *root = createNewNode(server_fd, inet_ntoa(server_addr.sin_addr));
     ClientList *now = root;
+
+    
+    pthread_t inputThreadId;
+    if (pthread_create(&inputThreadId, NULL, quitHandler, (void *)root) != 0)
+    {
+        errorMsg("input thread ERROR");
+    }
 
     while (true)
     {

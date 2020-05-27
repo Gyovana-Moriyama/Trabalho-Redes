@@ -29,7 +29,7 @@ void quit(int sock)
 //Handle with Ctrl C
 void ctrl_c_handler(int sig)
 {
-    cout << "To exit use /quit";
+    cout << "To exit use /quit" << endl;
 }
 
 //Put the newchar at the end of a string
