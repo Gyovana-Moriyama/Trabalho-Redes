@@ -4,118 +4,265 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <pthread.h>
-
-#define PORT            8080
-#define MESSAGE_SIZE    4096
-#define PROTOCOL        0
-
-#define NUM_THREADS     2
+#include <signal.h>
+#include <ctype.h>
+#include "socket.h"
 
 using namespace std;
 
+//Global variables
+volatile sig_atomic_t flag = 0;
+
 //Shows error message and exit
-void errorMsg(const char *msg){
+void errorMsg(const char *msg)
+{
     perror(msg);
     exit(1);
 }
-
-void quit(int sock) {
+//Closes client
+void quit(int sock)
+{
     close(sock);
     exit(0);
 }
 
-void *receiveMsg(void *sock){
-    int n;
-    char buffer[MESSAGE_SIZE];
+//Handle with Ctrl C
+void ctrl_c_handler(int sig)
+{
+    cout << "To exit use /quit";
+}
 
-    while(true) {
-        // Receives message
-        bzero(buffer, MESSAGE_SIZE);
-        n = recv(*(int *)sock, buffer, MESSAGE_SIZE, 0);
-        if(n <= 0) errorMsg("ERROR reading from socket");
+//Put the newchar at the end of a string
+void str_trim(char *str, char newchar)
+{
+    int n = strlen(str);
+    //if the newchar is already at the end of the string, does not need to put
+    if (newchar == str[n - 1])
+    {
+        return;
+    }
+    //is the last character of the string is a alphabet letter, put the newchar after it
+    if (isalnum(str[n - 1]) != 0)
+        str[n] = newchar;
+    //if is not, substitue the last character
+    else
+        str[n - 1] = newchar;
+}
 
-        // Quits if receive quit message
-        if (!strcmp(buffer, "/quit\n")) {
-            cout << "Quitting";
-            quit(*(int *)sock);
-        }
+//Prints the received message
+void *receiveMsgHandler(void *sock)
+{
+    char buffer[MESSAGE_SIZE] = {};
+    int rcv;
+    while (true)
+    {
+        rcv = recv(*(int *)sock, buffer, MESSAGE_SIZE, 0);
+        if (rcv <= 0)
+            errorMsg("ERROR reading from socket");
 
-        cout << "Incoming >> " << buffer << "\n"; ; 
+        cout << buffer;
     }
 }
 
-void *sendMsg(void *sock) {
-    int n;
-    char buffer[MESSAGE_SIZE];
+// Gets input and send message to server
+void *sendMsgHandler(void *sock)
+{
+    char buffer[MESSAGE_SIZE] = {};
     string message;
-
-    while(true){
-        // Gets input
+    int snd;
+    while (true)
+    {
+        //  Gets input
         getline(cin, message);
-
         // Calculates how many parts the message will be divided into
-        int div = (message.length() > MESSAGE_SIZE) ? (message.length()/MESSAGE_SIZE) : 0;
+        int div = (message.length() > (MESSAGE_SIZE - 1)) ? (message.length() / (MESSAGE_SIZE - 1)) : 0;
 
-        for(int i=0; i<=div; i++) {
+        for (int i = 0; i <= div; i++)
+        {
             // Clear buffer
             bzero(buffer, MESSAGE_SIZE);
 
             // Copy message limited by MESSAGE_SIZE
-            message.copy(buffer, MESSAGE_SIZE, i*MESSAGE_SIZE);
+            message.copy(buffer, MESSAGE_SIZE - 1, (i * (MESSAGE_SIZE - 1)));
 
+            //put /0 at the end of the command
+            if (!strcmp(buffer, "/ping") || !strcmp(buffer, "/quit"))
+                str_trim(buffer, '\0');
+            //Put \n at the end of the messages
+            else
+                str_trim(buffer, '\n');
             // Sends message
-            n = send(*(int *)sock, buffer, strlen(buffer), MSG_DONTWAIT);
-            if(n < 0) errorMsg("ERROR writing to socket");
+            snd = send(*(int *)sock, buffer, strlen(buffer), MSG_DONTWAIT);
+            if (snd < 0)
+                errorMsg("ERROR writing to socket");
+        }
 
-            // Quits if receive quit message
-            if (!strcmp(buffer, "/quit")) {
-                cout << "Quitting";
-                quit(*(int *)sock);
-            }
+        // Quits if receive quit message
+        if (!strcmp(buffer, "/quit"))
+        {
+            cout << "Quitting\n";
+            quit(*(int *)sock);
         }
     }
 }
+// void *receiveMsg(void *sock){
+//     int n;
+//     char buffer[MESSAGE_SIZE];
 
+//     while(true) {
+//         // Receives message
+//         bzero(buffer, MESSAGE_SIZE);
+//         n = recv(*(int *)sock, buffer, MESSAGE_SIZE, 0);
+//         if(n <= 0) errorMsg("ERROR reading from socket");
 
-int main(int argc, char const *argv[]){
-    int sock = 0;
+//         // Quits if receive quit message
+//         if (!strcmp(buffer, "/quit\n")) {
+//             cout << "Quitting";
+//             quit(*(int *)sock);
+//         }
+
+//         cout << "Incoming >> " << buffer << "\n";
+//     }
+// }
+
+// void *sendMsg(void *sock) {
+//     int n;
+//     char buffer[MESSAGE_SIZE];
+//     string message;
+
+//     while(true){
+//         // Gets input
+//         getline(cin, message);
+
+//         // Calculates how many parts the message will be divided into
+//         int div = (message.length() > MESSAGE_SIZE) ? (message.length()/MESSAGE_SIZE) : 0;
+
+//         for(int i=0; i<=div; i++) {
+//             // Clear buffer
+//             bzero(buffer, MESSAGE_SIZE);
+
+//             // Copy message limited by MESSAGE_SIZE
+//             message.copy(buffer, MESSAGE_SIZE, i*MESSAGE_SIZE);
+
+//             // Sends message
+//             n = send(*(int *)sock, buffer, strlen(buffer), MSG_DONTWAIT);
+//             if(n < 0) errorMsg("ERROR writing to socket");
+
+//             // Quits if receive quit message
+//             if (!strcmp(buffer, "/quit")) {
+//                 cout << "Quitting";
+//                 quit(*(int *)sock);
+//             }
+//         }
+//     }
+// }
+
+int main(int argc, char const *argv[])
+{
     int n;
-    struct sockaddr_in serv_addr;
+    struct sockaddr_in server_addr, client_addr;
+    int s_addrlen = sizeof(server_addr);
+    int c_addrlen = sizeof(client_addr);
+    int sock = 0;
+    char nickname[NICKNAME_SIZE] = {};
+    char buffer[12] = {};
+
+    signal(SIGINT, ctrl_c_handler);
+
+    // struct hostent *server;
     char ip[10] = "127.0.0.1";
-    char buffer[MESSAGE_SIZE] = {0};
+
+    //Get nickname
+    cout << "Please enter your nickname: ";
+    if (fgets(nickname, NICKNAME_SIZE - 1, stdin) != NULL)
+    {
+        str_trim(nickname, '\0');
+    }
+
+    if (strlen(nickname) < 2 || strlen(nickname) > NICKNAME_SIZE - 1)
+    {
+        cout << "\nNickname must be more than one and less than thirty characteres.\n";
+        return -1;
+    }
 
     //Create socket file descriptor
-    if((sock = socket(AF_INET, SOCK_STREAM, PROTOCOL)) < 0){
+    if ((sock = socket(AF_INET, SOCK_STREAM, PROTOCOL)) < 0)
+    {
         cout << "\nSocket creation error \n";
         return -1;
     }
 
+    bzero((char *)&server_addr, s_addrlen);
+    bzero((char *)&client_addr, c_addrlen);
+
     //setup the host_addr structure for use in bind call
     //server byte order
-    serv_addr.sin_family = AF_INET;
+    server_addr.sin_family = AF_INET;
     //convert short int value from host to network byte order
-    serv_addr.sin_port = htons(PORT);
+    server_addr.sin_port = htons(PORT);
 
-    // Convert IPv4 and IPv6 addresses from text to binary form 
-    if(inet_pton(AF_INET, ip, &serv_addr.sin_addr) <= 0){
+    //server_addr.sin_addr.s_addr = inet_addr(ip);
+
+    // Convert IPv4 and IPv6 addresses from text to binary form
+    if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0)
+    {
         cout << "\nInvalid address/ Address not supported\n";
         return -1;
     }
+    
+    //commands menu
+    //!botar num while pra pegar smp;
+    cout << "Connect: /connect\nQuit: /quit\nPing: /ping\n";
+    if (fgets(buffer, 12, stdin) != NULL)
+    {
+        str_trim(buffer, '\0');
+    }
 
     //Connects to server
-    if(connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0){
-        cout << "\nConnection failed\n";
-        return -1;
-    }
-    
-    // Creates 2 threads. One used to receive messages, and other to send messages.
-    pthread_t threads[NUM_THREADS];
-    
-    pthread_create(&threads[1], NULL, sendMsg, &sock);
-    pthread_create(&threads[0], NULL, receiveMsg, &sock);
+    if (!strcmp(buffer, "/connect"))
+    {
+        if (connect(sock, (struct sockaddr *)&server_addr, s_addrlen) < 0)
+        {
+            cout << "\nConnection failed\n";
+            return -1;
+        }
 
+        //Names
+        getsockname(sock, (struct sockaddr *)&client_addr, (socklen_t *)&c_addrlen);
+        getsockname(sock, (struct sockaddr *)&server_addr, (socklen_t *)&s_addrlen);
+        cout << "Connect to Server: " << inet_ntoa(server_addr.sin_addr) << ": " << ntohs(server_addr.sin_port) << "\n";
+        cout << "You are: " << inet_ntoa(client_addr.sin_addr) << ": " << ntohs(client_addr.sin_port) << "\n";
+
+        send(sock, nickname, NICKNAME_SIZE, 0);
+
+        pthread_t recvMsgThread;
+        if (pthread_create(&recvMsgThread, NULL, receiveMsgHandler, &sock) != 0)
+        {
+            cout << "Create pthread error\n";
+            return -1;
+        }
+
+        pthread_t sendMsgThread;
+        if (pthread_create(&sendMsgThread, NULL, sendMsgHandler, &sock) != 0)
+        {
+            cout << "Create pthread error";
+        }
+        // // Creates 2 threads. One used to receive messages, and other to send messages.
+        // pthread_t threads[NUM_THREADS];
+
+        // pthread_create(&threads[1], NULL, sendMsg, &sock);
+        // pthread_create(&threads[0], NULL, receiveMsg, &sock);
+    }
+    //quits without connect to server
+    else if(!strcmp(buffer, "/quit")){
+        cout << "Quitting\n";
+        quit(sock);
+    }
+    //can't do /ping if is no connected to server
+    else if(!strcmp(buffer, "/ping"))
+        cout << "/ping can only be used after connecting to server.\n";
     // Keeps threads running
     while (true);
-    
+
     return 0;
 }

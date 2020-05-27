@@ -1,6 +1,6 @@
 all:
-	gcc -pthread client.cpp -o client -lstdc++
-	gcc -pthread server.cpp -o server -lstdc++
+	gcc -g -pthread client.cpp -o client -lstdc++
+	gcc -g -pthread server.cpp -o server -lstdc++
 
 run_client:
 	./client
