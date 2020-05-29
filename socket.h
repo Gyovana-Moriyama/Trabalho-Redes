@@ -7,9 +7,10 @@
 #define MESSAGE_SIZE    2049
 #define NICKNAME_SIZE   10
 
+typedef struct s_clientList ClientList;
 
-#define NUM_THREADS     2
-
-void str_trim(char *str, char newchar);
+void errorMsg(const char *msg);
+void ctrl_c_handler(int sig);
+ClientList *createNewNode(int server_fd, char *ip);
 
 #endif

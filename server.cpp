@@ -11,21 +11,27 @@
 using namespace std;
 
 //Struct to store Clients in a double linked list
-typedef struct s_clientList
+struct s_clientList
 {
-    int data;
+    int socket;
+    int received;
     struct s_clientList *prev;
     struct s_clientList *next;
     char ip[16];
     char name[NICKNAME_SIZE];
 
-} ClientList;
+};
 
 //Shows error message and exit
 void errorMsg(const char *msg)
 {
     perror(msg);
     exit(1);
+}
+
+void ctrl_c_handler(int sig)
+{
+    cout << "To exit use /quit" << endl;
 }
 
 //Closes the server
@@ -44,9 +50,11 @@ void *quitHandler(void *rootNode)
             while (root != NULL)
             {
                 //TODO
-                cout << "\nClose socketfd: " << root->data << endl;
-                send(root->data, quitMessage, MESSAGE_SIZE, 0);
-                close(root->data);
+                //! qnd fui dar /quit direto no server, parece q ele n fechou os clientes, voltou a dar erro nos clientes
+                //Acho que tem que começar do final da lista n do início, já q o início é o server
+                cout << "\nClose socketfd: " << root->socket << endl;
+               // send(root->data, quitMessage, MESSAGE_SIZE, 0);
+                close(root->socket);
                 tmp = root;
                 root = root->next;
                 free(tmp);
@@ -61,16 +69,12 @@ void *quitHandler(void *rootNode)
     }
 }
 
-void ctrl_c_handler(int sig)
-{
-    cout << "To exit use /quit" << endl;
-}
-
 //Creates a new node
 ClientList *createNewNode(int server_fd, char *ip)
 {
     ClientList *newNode = (ClientList *)malloc(sizeof(ClientList));
-    newNode->data = server_fd;
+    newNode->socket = server_fd;
+    newNode->received = 0;
     newNode->prev = NULL;
     newNode->next = NULL;
     strcpy(newNode->ip, ip);
@@ -86,10 +90,10 @@ void sendAllClients(ClientList *root, ClientList *node, char message[])
     while (tmp != NULL)
     {
         //sends the message to all clients except itself
-        if (node->data != tmp->data)
+        if (node->socket != tmp->socket)
         {
-            cout << "Send to: " << tmp->name << ">> " << message;
-            send(tmp->data, message, MESSAGE_SIZE, 0);
+            cout << "Send to: " << tmp->name << " >> " << message;
+            send(tmp->socket, message, MESSAGE_SIZE, 0);
         }
         tmp = tmp->next;
     }
@@ -98,7 +102,7 @@ void sendAllClients(ClientList *root, ClientList *node, char message[])
 //Sends pong to the client that sent /ping
 void pong(ClientList *node, char message[])
 {
-    send(node->data, message, MESSAGE_SIZE, 0);
+    send(node->socket, message, MESSAGE_SIZE, 0);
 }
 
 //Handles the client
@@ -113,16 +117,16 @@ void *clientHandler(void *info)
     ClientList *now = ((ClientList **)info)[2];
 
     //Naming
-    if (recv(node->data, nickname, NICKNAME_SIZE, 0) <= 0)
+    if (recv(node->socket, nickname, NICKNAME_SIZE, 0) <= 0)
     {
-        cout << node->ip << "didn't input name.\n";
+        cout << node->ip << "didn't input nickname.\n";
         leave_flag = 1;
     }
     else
     {
         strcpy(node->name, nickname);
-        cout << node->name << "(" << node->ip << ")"
-             << "(" << node->data << ")"
+        cout << node->name << " (" << node->ip << ")"
+             << " (" << node->socket << ")"
              << " joined the chatroom.\n";
         sprintf(sendBuffer, "%s joined the chatroom.\n", node->name);
         sendAllClients(root, node, sendBuffer);
@@ -137,7 +141,7 @@ void *clientHandler(void *info)
         bzero(recvBuffer, MESSAGE_SIZE);
         bzero(sendBuffer, MESSAGE_SIZE);
 
-        int rcv = recv(node->data, recvBuffer, MESSAGE_SIZE, 0);
+        int rcv = recv(node->socket, recvBuffer, MESSAGE_SIZE, 0);
 
         if (rcv <= 0)
             errorMsg("ERROR reading from socket");
@@ -145,8 +149,8 @@ void *clientHandler(void *info)
         //sends that the client is quitting the chatroom
         if (!strcmp(recvBuffer, "/quit"))
         {
-            cout << node->name << "(" << node->ip << ")"
-                 << "(" << node->data << ")"
+            cout << node->name << " (" << node->ip << ")"
+                 << " (" << node->socket << ")"
                  << " left the chatroom.\n";
             sprintf(sendBuffer, "%s left the chatroom.\n", node->name);
             sendAllClients(root, node, sendBuffer);
@@ -167,7 +171,7 @@ void *clientHandler(void *info)
     }
 
     //Remove Node
-    close(node->data);
+    close(node->socket);
     if (node == now)
     {
         now = node->prev;
@@ -252,13 +256,9 @@ void *clientHandler(void *info)
 
 int main(int argc, char const *argv[])
 {
-
     int server_fd = 0, client_fd = 0;
     int opt = 1;
-    struct sockaddr_in server_addr, client_addr;
-    int s_addrlen = sizeof(server_addr);
-    int c_addrlen = sizeof(client_addr);
-
+    
     signal(SIGINT, ctrl_c_handler);
 
     //Create socket file descriptor
@@ -273,6 +273,9 @@ int main(int argc, char const *argv[])
         errorMsg("setsockopt");
     }
 
+    struct sockaddr_in server_addr, client_addr;
+    int s_addrlen = sizeof(server_addr);
+    int c_addrlen = sizeof(client_addr);
     bzero((char *)&server_addr, s_addrlen);
     bzero((char *)&client_addr, c_addrlen);
 
@@ -299,33 +302,34 @@ int main(int argc, char const *argv[])
 
     //Print server IP
     getsockname(server_fd, (struct sockaddr *)&server_addr, (socklen_t *)&s_addrlen);
-    cout << "Start Server on: " << inet_ntoa(server_addr.sin_addr) << ":" << ntohs(server_addr.sin_port) << "\n";
+    cout << "Start Server on: " << inet_ntoa(server_addr.sin_addr) << ": " << ntohs(server_addr.sin_port) << "\n";
 
-    //Initial linked list for clients
+    //Initial linked list for clients, the root is the server
     ClientList *root = createNewNode(server_fd, inet_ntoa(server_addr.sin_addr));
     ClientList *now = root;
 
-    
+    //Thread to catch server input, in this case, is used to catch the '/quit'
     pthread_t inputThreadId;
     if (pthread_create(&inputThreadId, NULL, quitHandler, (void *)root) != 0)
     {
         errorMsg("input thread ERROR");
     }
 
+    //Accepts new clients
     while (true)
     {
-        client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&c_addrlen);
+        // client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&c_addrlen);
 
-        // if ((client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&c_addrlen)) < 0)
-        // {
-        //     errorMsg("accept ERROR");
-        // }
+        if ((client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&c_addrlen)) < 0)
+        {
+            errorMsg("accept ERROR");
+        }
 
         //Print client IP
         getpeername(client_fd, (struct sockaddr *)&client_addr, (socklen_t *)&c_addrlen);
-        cout << "Client " << inet_ntoa(client_addr.sin_addr) << " : " << ntohs(client_addr.sin_port) << " came in.\n";
+        cout << "Client " << inet_ntoa(client_addr.sin_addr) << " : " << ntohs(client_addr.sin_port) << " joined.\n";
 
-        //Append linked list for clients
+        //Create new client node and append to linked list
         ClientList *node = createNewNode(client_fd, inet_ntoa(client_addr.sin_addr));
         node->prev = now;
         now->next = node;

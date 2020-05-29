@@ -11,7 +11,7 @@
 using namespace std;
 
 //Global variables
-volatile sig_atomic_t flag = 0;
+char nickname[MESSAGE_SIZE] = {};
 
 //Shows error message and exit
 void errorMsg(const char *msg)
@@ -30,6 +30,13 @@ void quit(int sock)
 void ctrl_c_handler(int sig)
 {
     cout << "To exit use /quit" << endl;
+}
+
+//Prints the user nickname before writes the message
+void str_print_nickname()
+{
+    printf("\r%s: ", nickname);
+    fflush(stdout);
 }
 
 //Put the newchar at the end of a string
@@ -60,7 +67,8 @@ void *receiveMsgHandler(void *sock)
         if (rcv <= 0)
             errorMsg("ERROR reading from socket");
 
-        cout << buffer;
+        cout << "\r" << buffer;
+        str_print_nickname();
     }
 }
 
@@ -72,6 +80,7 @@ void *sendMsgHandler(void *sock)
     int snd;
     while (true)
     {
+        str_print_nickname();
         //  Gets input
         getline(cin, message);
         // Calculates how many parts the message will be divided into
@@ -164,7 +173,6 @@ int main(int argc, char const *argv[])
     int s_addrlen = sizeof(server_addr);
     int c_addrlen = sizeof(client_addr);
     int sock = 0;
-    char nickname[MESSAGE_SIZE] = {};
     char buffer[12] = {};
 
     signal(SIGINT, ctrl_c_handler);
@@ -181,7 +189,7 @@ int main(int argc, char const *argv[])
             str_trim(nickname, '\0');
         }
     } while (strlen(nickname) < 1 || strlen(nickname) > NICKNAME_SIZE - 1);
-    
+
     //Create socket file descriptor
     if ((sock = socket(AF_INET, SOCK_STREAM, PROTOCOL)) < 0)
     {
@@ -198,15 +206,13 @@ int main(int argc, char const *argv[])
     //convert short int value from host to network byte order
     server_addr.sin_port = htons(PORT);
 
-    //server_addr.sin_addr.s_addr = inet_addr(ip);
-
     // Convert IPv4 and IPv6 addresses from text to binary form
     if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0)
     {
         cout << "\nInvalid address/ Address not supported\n";
         return -1;
     }
-    
+
     //commands menu
     cout << "Connect: /connect\nQuit: /quit\nPing: /ping\n";
     bool connected = false;
@@ -221,15 +227,15 @@ int main(int argc, char const *argv[])
         if (!strcmp(buffer, "/connect"))
             connected = true;
         //quits without connect to server
-        else if(!strcmp(buffer, "/quit"))
+        else if (!strcmp(buffer, "/quit"))
         {
             cout << "Quitting\n";
             quit(sock);
         }
         //can't do /ping if is no connected to server
-        else if(!strcmp(buffer, "/ping"))
+        else if (!strcmp(buffer, "/ping"))
             cout << "/ping can only be used after connecting to server.\n";
-        else 
+        else
             cout << "Unknown command" << endl;
     }
 
@@ -265,9 +271,10 @@ int main(int argc, char const *argv[])
 
     // pthread_create(&threads[1], NULL, sendMsg, &sock);
     // pthread_create(&threads[0], NULL, receiveMsg, &sock);
-    
+
     // Keeps threads running
-    while (true);
+    while (true)
+        ;
 
     return 0;
 }
