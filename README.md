@@ -9,3 +9,11 @@
 ## Instruções para uso
 - "make" para compilar o código.
 - "make run_server" para executar o servidor, e "make run_client" para executar o cliente. Obs: o servidor deve ser executado antes do cliente.
+
+## Comandos 
+### Cliente:
+- /connect conecta o cliente com o servidor
+- /ping o servidor responde com pong
+- /quit desconecta o cliente do servidor
+### Servidor:
+- /quit desconecta todos os clientes que ainda estiverem conectados e fecha o servidor
