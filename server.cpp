@@ -1,9 +1,4 @@
 #include <iostream>
-#include <netinet/in.h>
-#include <unistd.h>
-#include <string.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
 #include <pthread.h>
 #include <signal.h>
 #include "socket.h"
@@ -19,7 +14,6 @@ struct s_clientList
     struct s_clientList *next;
     char ip[16];
     char name[NICKNAME_SIZE];
-
 };
 
 //Shows error message and exit
@@ -46,14 +40,9 @@ void *quitHandler(void *rootNode)
         {
             ClientList *root = (ClientList *)rootNode;
             ClientList *tmp;
-            char quitMessage[MESSAGE_SIZE] = "Server lost connection";
             while (root != NULL)
             {
-                //TODO
-                //! qnd fui dar /quit direto no server, parece q ele n fechou os clientes, voltou a dar erro nos clientes
-                //Acho que tem que começar do final da lista n do início, já q o início é o server
                 cout << "\nClose socketfd: " << root->socket << endl;
-               // send(root->data, quitMessage, MESSAGE_SIZE, 0);
                 close(root->socket);
                 tmp = root;
                 root = root->next;
@@ -64,7 +53,8 @@ void *quitHandler(void *rootNode)
         }
         else
         {
-            cout << "Unknown command\n" << "\tCommand List:\nQuit: /quit\n";
+            cout << "Unknown command\n"
+                 << "\tCommand List:\nQuit: /quit\n";
         }
     }
 }
@@ -96,22 +86,21 @@ void sendAllClients(ClientList *root, ClientList *node, char message[])
         if (node->socket != tmp->socket)
         {
             cout << "Send to: " << tmp->name << " >> " << message;
-            
-            //TODO 
+
+            //TODO
             //Try send the message 5 times if send returns error
             do
             {
                 snd = send(tmp->socket, message, MESSAGE_SIZE, 0);
                 tries++;
-                snd = -1; //Forçando o erro
+                //  snd = -1; //Forçando o erro
 
-            } 
-            while(snd < 0 && tries < 5);
+            } while (snd < 0 && tries < 5);
 
             //Close client connection
-            if(tries == 5) 
+            if (tries == 5)
             {
-                
+
                 close(tmp->socket);
                 tmp2 = tmp;
                 tmp = tmp->next;
@@ -122,7 +111,7 @@ void sendAllClients(ClientList *root, ClientList *node, char message[])
 
             tries = 0;
         }
-        else //Esse monte de else ta zuado 
+        else //Esse monte de else ta zuado
             tmp = tmp->next;
     }
 }
@@ -150,6 +139,7 @@ void *clientHandler(void *info)
         cout << node->ip << "didn't input nickname.\n";
         leave_flag = 1;
     }
+    //Announces the client that joined the chatroom
     else
     {
         strcpy(node->name, nickname);
@@ -195,7 +185,6 @@ void *clientHandler(void *info)
             sprintf(sendBuffer, "%s: %s", node->name, recvBuffer);
             sendAllClients(root, node, sendBuffer);
         }
-
     }
 
     //Remove Node
@@ -286,7 +275,7 @@ int main(int argc, char const *argv[])
 {
     int server_fd = 0, client_fd = 0;
     int opt = 1;
-    
+
     signal(SIGINT, ctrl_c_handler);
 
     //Create socket file descriptor
@@ -323,7 +312,7 @@ int main(int argc, char const *argv[])
 
     //Tells the socket to listen to the incoming connections
     //maximum size for the backlog queue is 5
-    if (listen(server_fd, 5) < 0)
+    if (listen(server_fd, MAX_CONNECTIONS) < 0)
     {
         errorMsg("listen");
     }
@@ -346,7 +335,6 @@ int main(int argc, char const *argv[])
     //Accepts new clients
     while (true)
     {
-        // client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&c_addrlen);
 
         if ((client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&c_addrlen)) < 0)
         {

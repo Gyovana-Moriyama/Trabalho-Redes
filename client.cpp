@@ -1,11 +1,6 @@
 #include <iostream>
-#include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
 #include <pthread.h>
 #include <signal.h>
-#include <ctype.h>
 #include "socket.h"
 
 using namespace std;
@@ -64,13 +59,19 @@ void *receiveMsgHandler(void *sock)
     while (true)
     {
         rcv = recv(*(int *)sock, buffer, MESSAGE_SIZE, 0);
-        if(rcv == 0)
-            errorMsg("Connection closed");
+        if (rcv == 0)
+        {
+            cout << "\rLost connection to server...\n";
+            fflush(stdout);
+            quit(*(int *)sock);
+        }
         else if (rcv < 0)
             errorMsg("ERROR reading from socket");
-
-        cout << "\r" << buffer;
-        str_print_nickname();
+        else
+        {
+            cout << "\r" << buffer;
+            str_print_nickname();
+        }
     }
 }
 
@@ -179,9 +180,6 @@ int main(int argc, char const *argv[])
 
     signal(SIGINT, ctrl_c_handler);
 
-    // struct hostent *server;
-    char ip[10] = "127.0.0.1";
-
     //Get nickname
     do
     {
@@ -195,8 +193,9 @@ int main(int argc, char const *argv[])
     //Create socket file descriptor
     if ((sock = socket(AF_INET, SOCK_STREAM, PROTOCOL)) < 0)
     {
-        cout << "\nSocket creation error \n";
-        return -1;
+        errorMsg("\nSocket creation error \n");
+        // cout << "\nSocket creation error \n";
+        // return -1;
     }
 
     bzero((char *)&server_addr, s_addrlen);
@@ -208,11 +207,37 @@ int main(int argc, char const *argv[])
     //convert short int value from host to network byte order
     server_addr.sin_port = htons(PORT);
 
-    // Convert IPv4 and IPv6 addresses from text to binary form
-    if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0)
+    char ip[10] = {};
+
+    //Gets server address, it can be the default or any other valid ip
+    do
     {
-        cout << "\nInvalid address/ Address not supported\n";
-        return -1;
+        cout << "Please enter server address (default: " << DEFAULT_IP << ").\nFor default enter /default: ";
+        if (fgets(ip, MESSAGE_SIZE - 1, stdin) != NULL)
+        {
+            str_trim(ip, '\0');
+        }
+
+    } while (strlen(ip) < 8 || strlen(ip) > 9);
+
+    int addr = 0;
+
+    if (!strcmp(ip, "/default"))
+    {
+        // Convert IPv4 and IPv6 addresses from text to binary form
+        addr = inet_pton(AF_INET, DEFAULT_IP, &server_addr.sin_addr);
+    }
+    else
+    {
+        // Convert IPv4 and IPv6 addresses from text to binary form
+        addr = inet_pton(AF_INET, ip, &server_addr.sin_addr);
+    }
+
+    if (addr <= 0)
+    {
+        errorMsg("\nInvalid address/ Address not supported\n");
+        // cout << "\nInvalid address/ Address not supported\n";
+        // return -1;
     }
 
     //commands menu
@@ -244,8 +269,9 @@ int main(int argc, char const *argv[])
     //Connects to server
     if (connect(sock, (struct sockaddr *)&server_addr, s_addrlen) < 0)
     {
-        cout << "\nConnection failed\n";
-        return -1;
+        errorMsg("\nConnection failed\n");
+        // cout << "\nConnection failed\n";
+        // return -1;
     }
 
     //Names
@@ -259,24 +285,22 @@ int main(int argc, char const *argv[])
     pthread_t recvMsgThread;
     if (pthread_create(&recvMsgThread, NULL, receiveMsgHandler, &sock) != 0)
     {
-        cout << "Create pthread error\n";
-        return -1;
+        errorMsg("\nCreate pthread error\n");
+        // cout << "Create pthread error\n";
+        // return -1;
     }
 
     pthread_t sendMsgThread;
     if (pthread_create(&sendMsgThread, NULL, sendMsgHandler, &sock) != 0)
     {
-        cout << "Create pthread error";
+        errorMsg("\nCreate pthread error\n");
+        // cout << "Create pthread error";
+        // return -1;
     }
-    // // Creates 2 threads. One used to receive messages, and other to send messages.
-    // pthread_t threads[NUM_THREADS];
-
-    // pthread_create(&threads[1], NULL, sendMsg, &sock);
-    // pthread_create(&threads[0], NULL, receiveMsg, &sock);
 
     // Keeps threads running
-    while (true)
-        ;
+    pthread_join(recvMsgThread, NULL);
+    pthread_join(sendMsgThread, NULL);
 
     return 0;
 }
