@@ -87,15 +87,43 @@ ClientList *createNewNode(int server_fd, char *ip)
 void sendAllClients(ClientList *root, ClientList *node, char message[])
 {
     ClientList *tmp = root->next;
+    ClientList *tmp2 = NULL;
+    int snd, tries = 0;
+
     while (tmp != NULL)
     {
         //sends the message to all clients except itself
         if (node->socket != tmp->socket)
         {
             cout << "Send to: " << tmp->name << " >> " << message;
-            send(tmp->socket, message, MESSAGE_SIZE, 0);
+            
+            //TODO 
+            //Try send the message 5 times if send returns error
+            do
+            {
+                snd = send(tmp->socket, message, MESSAGE_SIZE, 0);
+                tries++;
+                snd = -1; //Forçando o erro
+
+            } 
+            while(snd < 0 && tries < 5);
+
+            //Close client connection
+            if(tries == 5) 
+            {
+                
+                close(tmp->socket);
+                tmp2 = tmp;
+                tmp = tmp->next;
+                free(tmp2);
+            }
+            else
+                tmp = tmp->next;
+
+            tries = 0;
         }
-        tmp = tmp->next;
+        else //Esse monte de else ta zuado 
+            tmp = tmp->next;
     }
 }
 

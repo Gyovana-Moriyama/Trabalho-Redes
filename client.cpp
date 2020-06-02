@@ -64,7 +64,9 @@ void *receiveMsgHandler(void *sock)
     while (true)
     {
         rcv = recv(*(int *)sock, buffer, MESSAGE_SIZE, 0);
-        if (rcv <= 0)
+        if(rcv == 0)
+            errorMsg("Connection closed");
+        else if (rcv < 0)
             errorMsg("ERROR reading from socket");
 
         cout << "\r" << buffer;
