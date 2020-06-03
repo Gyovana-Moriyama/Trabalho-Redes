@@ -123,9 +123,7 @@ void *sendMessage(void *info)
         if (snd < 0)
             errorMsg("ERROR writing to socket");
         sendInfo->node->attempts++;
-        cout << "Vamos esperar...\n";
-        usleep(5000000);
-        cout << "Acabei de esperar\n";
+        usleep(WAIT_ACK);
     } while (!sendInfo->node->received && sendInfo->node->attempts < 5);
 
     // Disconnects client

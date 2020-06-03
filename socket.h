@@ -16,7 +16,7 @@
 #define DEFAULT_IP      "127.0.0.1"
 #define MAX_CONNECTIONS  5
 
-#define WAIT_ACK        400
+#define WAIT_ACK        400000
 
 typedef struct s_clientList ClientList;
 
