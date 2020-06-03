@@ -17,6 +17,12 @@ struct s_clientList
     char name[NICKNAME_SIZE];
 };
 
+typedef struct s_sendInfo
+{
+    ClientList *node;
+    char *message;
+} SendInfo;
+
 //Shows error message and exit
 void errorMsg(const char *msg)
 {
@@ -106,6 +112,37 @@ void checkAcknowledgement(ClientList *root, ClientList *node, char message[])
     }
 }
 
+// Tries to send the message 5 times. If unsuccessful, disconnects client
+void *sendMessage(void *info)
+{
+    SendInfo *sendInfo = (SendInfo *)info;
+
+    do
+    {
+        int snd = send(sendInfo->node->socket, sendInfo->message, MESSAGE_SIZE + NICKNAME_SIZE + 2, 0);
+        if (snd < 0)
+            errorMsg("ERROR writing to socket");
+        sendInfo->node->attempts++;
+        cout << "Vamos esperar...\n";
+        usleep(5000000);
+        cout << "Acabei de esperar\n";
+    } while (!sendInfo->node->received && sendInfo->node->attempts < 5);
+
+    // Disconnects client
+    if (sendInfo->node->attempts == 5)
+    {
+        //Remove Node
+        close(sendInfo->node->socket);
+        sendInfo->node->prev->next = sendInfo->node->next;
+        sendInfo->node->next->prev = sendInfo->node->prev;
+
+        free(sendInfo->node);
+    }
+
+    free(sendInfo->message);
+    free(sendInfo);
+}
+
 //Send the message to all clients
 void sendAllClients(ClientList *root, ClientList *node, char message[])
 {
@@ -118,9 +155,15 @@ void sendAllClients(ClientList *root, ClientList *node, char message[])
         if (node->socket != tmp->socket)
         {
             cout << "Send to: " << tmp->name << " >> " << message;
-            snd = send(tmp->socket, message, MESSAGE_SIZE, 0);
-            if (snd < 0)
-                errorMsg("ERROR writing to socket");
+
+            pthread_t sendThread;
+            SendInfo *sendInfo = (SendInfo*)malloc(sizeof(SendInfo));
+            sendInfo->node = tmp;
+            sendInfo->message = (char *)malloc(sizeof(char) * (MESSAGE_SIZE + NICKNAME_SIZE + 2));
+            strcpy(sendInfo->message, message);
+
+            if (pthread_create(&sendThread, NULL, sendMessage, (void *)sendInfo) != 0)
+                errorMsg("Create thread error");
         }
         tmp = tmp->next;
     }
@@ -160,8 +203,8 @@ void *clientHandler(void *info)
              << " joined the chatroom.\n";
         sprintf(sendBuffer, "%s joined the chatroom.\n", node->name);
         sendAllClients(root, node, sendBuffer);
-        usleep(WAIT_ACK);
-        checkAcknowledgement(root, node, sendBuffer);
+        // usleep(WAIT_ACK);
+        // checkAcknowledgement(root, node, sendBuffer);
     }
 
     //Conversation
@@ -182,6 +225,7 @@ void *clientHandler(void *info)
         {
             node->received = true;
             node->attempts = 0;
+            cout << node->name << " received the message" << endl;
         }
         //sends that the client is quitting the chatroom
         else if (!strcmp(recvBuffer, "/quit"))
@@ -191,8 +235,8 @@ void *clientHandler(void *info)
                  << " left the chatroom.\n";
             sprintf(sendBuffer, "%s left the chatroom.\n", node->name);
             sendAllClients(root, node, sendBuffer);
-            usleep(WAIT_ACK);
-            checkAcknowledgement(root, node, sendBuffer);
+            // usleep(WAIT_ACK);
+            // checkAcknowledgement(root, node, sendBuffer);
             leave_flag = 1;
         }
         //if client sent /ping, the server answers with pong
@@ -205,8 +249,8 @@ void *clientHandler(void *info)
         {
             sprintf(sendBuffer, "%s: %s", node->name, recvBuffer);
             sendAllClients(root, node, sendBuffer);
-            usleep(WAIT_ACK);
-            checkAcknowledgement(root, node, sendBuffer);
+            // usleep(WAIT_ACK);
+            // checkAcknowledgement(root, node, sendBuffer);
         }
     }
 

@@ -58,7 +58,7 @@ void *receiveMsgHandler(void *sock)
     int rcv;
     while (true)
     {
-        rcv = recv(*(int *)sock, buffer, MESSAGE_SIZE, 0);
+        rcv = recv(*(int *)sock, buffer, MESSAGE_SIZE + NICKNAME_SIZE + 2, 0);
         if (rcv == 0)
         {
             cout << "\rLost connection to server...\n";
@@ -72,7 +72,8 @@ void *receiveMsgHandler(void *sock)
             cout << "\r" << buffer;
             str_print_nickname();
 
-            // Sends message to server, informing that the message was recevied
+            // Sends message to server, informing that the message was received
+            bzero(buffer, MESSAGE_SIZE + NICKNAME_SIZE + 2);
             strcpy(buffer, "/ack");
             int snd = send(*(int *)sock, buffer, strlen(buffer), MSG_DONTWAIT);
             if (snd < 0)
