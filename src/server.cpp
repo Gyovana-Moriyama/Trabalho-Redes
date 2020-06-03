@@ -25,10 +25,10 @@ typedef struct s_sendInfo
     char *message;
 } SendInfo;
 
-ClientList *createNewNode(int server_fd, char *ip)
+ClientList *createNewNode(int sock_fd, char *ip)
 {
     ClientList *newNode = (ClientList *)malloc(sizeof(ClientList));
-    newNode->socket = server_fd;
+    newNode->socket = sock_fd;
     newNode->received = false;
     newNode->attempts = 0;
     newNode->prev = NULL;
@@ -41,7 +41,7 @@ ClientList *createNewNode(int server_fd, char *ip)
 
 void disconnectNode(ClientList *node, ClientList *now)
 {
-
+    cout << "Disconnecting " << node->name << endl;
     close(node->socket);
     if (node == now)
     {
@@ -103,10 +103,7 @@ bool pong(ClientList *node, char message[])
 {
     int snd = send(node->socket, message, MESSAGE_SIZE, 0);
     if (snd < 0)
-    {
-        cout << "Disconnecting " << node->name << endl;
         return false;
-    }
 
     return true;
 }
@@ -126,7 +123,6 @@ void *sendMessage(void *info)
     // Disconnects client
     if (sendInfo->node->attempts == 5 || snd < 0)
     {
-        cout << "Disconnecting " << sendInfo->node->name << endl;
         //Remove Node
         disconnectNode(sendInfo->node, sendInfo->now);
     }
@@ -146,6 +142,7 @@ void sendAllClients(ClientList *root, ClientList *node, ClientList *now, char me
 
     while (tmp != NULL)
     {
+        cout << tmp->name << endl;
         //sends the message to all clients except itself
         if (node->socket != tmp->socket)
         {
@@ -160,6 +157,7 @@ void sendAllClients(ClientList *root, ClientList *node, ClientList *now, char me
 
             if (pthread_create(&sendThread, NULL, sendMessage, (void *)sendInfo) != 0)
                 errorMsg("Create thread error");
+            pthread_detach(sendThread);
         }
         tmp = tmp->next;
     }
@@ -168,29 +166,18 @@ void sendAllClients(ClientList *root, ClientList *node, ClientList *now, char me
 void *clientHandler(void *info)
 {
     int leave_flag = 0;
-    char nickname[NICKNAME_SIZE] = {};
     char recvBuffer[MESSAGE_SIZE] = {};
     char sendBuffer[MESSAGE_SIZE + NICKNAME_SIZE + 2] = {};
     ClientList *root = ((ClientList **)info)[0];
     ClientList *node = ((ClientList **)info)[1];
     ClientList *now = ((ClientList **)info)[2];
 
-    //Naming
-    if (recv(node->socket, nickname, NICKNAME_SIZE, 0) <= 0)
-    {
-        cout << node->ip << "didn't input nickname.\n";
-        leave_flag = 1;
-    }
     //Announces the client that joined the chatroom
-    else
-    {
-        strcpy(node->name, nickname);
-        cout << node->name << " (" << node->ip << ")"
-             << " (" << node->socket << ")"
-             << " joined the chatroom.\n";
-        sprintf(sendBuffer, "%s joined the chatroom.\n", node->name);
-        sendAllClients(root, node, now, sendBuffer);
-    }
+    cout << node->name << " (" << node->ip << ")"
+         << " (" << node->socket << ")"
+         << " joined the chatroom.\n";
+    sprintf(sendBuffer, "%s joined the chatroom.\n", node->name);
+    sendAllClients(root, node, now, sendBuffer);
 
     //Conversation
     while (true)
@@ -249,6 +236,7 @@ int main(int argc, char const *argv[])
 {
     int server_fd = 0, client_fd = 0;
     int opt = 1;
+    char nickname[NICKNAME_SIZE] = {};
 
     signal(SIGINT, ctrl_c_handler);
 
@@ -312,10 +300,22 @@ int main(int argc, char const *argv[])
 
         //Create new client node and append to linked list
         ClientList *node = createNewNode(client_fd, inet_ntoa(client_addr.sin_addr));
+
+        //Naming
+        recv(node->socket, nickname, NICKNAME_SIZE, 0);
+        strcpy(node->name, nickname);
+        ClientList *tmp = root;
+
+        while (tmp->next != NULL)
+        {
+            tmp = tmp->next;
+        }
+        now = tmp;
         node->prev = now;
         now->next = node;
         now = node;
 
+        bzero(nickname, NICKNAME_SIZE);
         ClientList *info[3] = {root, node, now};
 
         //create a new thread for each client
