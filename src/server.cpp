@@ -39,11 +39,27 @@ ClientList *createNewNode(int sock_fd, char *ip)
     return newNode;
 }
 
+void printNode(ClientList *node)
+{
+    cout << "\n\tPrintando node: " << endl;
+    if (node->prev == NULL)
+        cout << "Node prev = NULL\n";
+    else
+        cout << "Node prev = " << node->prev->name << endl;
+
+    cout << "Node = " << node->name << endl;
+
+    if (node->next == NULL)
+        cout << "Node next = NULL\n";
+    else
+        cout << "Node next = " << node->next->name << endl;
+}
+
 void disconnectNode(ClientList *node, ClientList *now)
 {
     cout << "Disconnecting " << node->name << endl;
     close(node->socket);
-    if (node == now)
+    if (node == NULL)
     {
         now = node->prev;
         now->next = NULL;
@@ -314,8 +330,9 @@ int main(int argc, char const *argv[])
         node->prev = now;
         now->next = node;
         now = node;
-
+       
         bzero(nickname, NICKNAME_SIZE);
+
         ClientList *info[3] = {root, node, now};
 
         //create a new thread for each client
