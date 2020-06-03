@@ -9,7 +9,8 @@ using namespace std;
 struct s_clientList
 {
     int socket;
-    int received;
+    bool received;
+    int attempts;
     struct s_clientList *prev;
     struct s_clientList *next;
     char ip[16];
@@ -64,7 +65,8 @@ ClientList *createNewNode(int server_fd, char *ip)
 {
     ClientList *newNode = (ClientList *)malloc(sizeof(ClientList));
     newNode->socket = server_fd;
-    newNode->received = 0;
+    newNode->received = false;
+    newNode->attempts = 0;
     newNode->prev = NULL;
     newNode->next = NULL;
     strcpy(newNode->ip, ip);
@@ -73,12 +75,42 @@ ClientList *createNewNode(int server_fd, char *ip)
     return newNode;
 }
 
+void checkAcknowledgement(ClientList *root, ClientList *node, char message[])
+{
+    ClientList *tmp = root->next;
+    int snd;
+
+    while (tmp != NULL)
+    {
+        if (node->socket != tmp->socket)
+        {
+            while (!tmp->received && tmp->attempts < 5)
+            {
+                snd = send(tmp->socket, message, MESSAGE_SIZE, 0);
+                if (snd < 0)
+                    errorMsg("ERROR writing to socket");
+                tmp->attempts++;
+                usleep(WAIT_ACK);
+            }
+
+            if (tmp->attempts == 5)
+            {
+                //Remove Node
+                close(tmp->socket);
+                tmp->prev->next = tmp->next;
+                tmp->next->prev = tmp->prev;
+
+                free(tmp);
+            }
+        }
+    }
+}
+
 //Send the message to all clients
 void sendAllClients(ClientList *root, ClientList *node, char message[])
 {
     ClientList *tmp = root->next;
-    ClientList *tmp2 = NULL;
-    int snd, tries = 0;
+    int snd;
 
     while (tmp != NULL)
     {
@@ -86,40 +118,20 @@ void sendAllClients(ClientList *root, ClientList *node, char message[])
         if (node->socket != tmp->socket)
         {
             cout << "Send to: " << tmp->name << " >> " << message;
-
-            //TODO
-            //Try send the message 5 times if send returns error
-            do
-            {
-                snd = send(tmp->socket, message, MESSAGE_SIZE, 0);
-                tries++;
-                //  snd = -1; //Forçando o erro
-
-            } while (snd < 0 && tries < 5);
-
-            //Close client connection
-            if (tries == 5)
-            {
-
-                close(tmp->socket);
-                tmp2 = tmp;
-                tmp = tmp->next;
-                free(tmp2);
-            }
-            else
-                tmp = tmp->next;
-
-            tries = 0;
+            snd = send(tmp->socket, message, MESSAGE_SIZE, 0);
+            if (snd < 0)
+                errorMsg("ERROR writing to socket");
         }
-        else //Esse monte de else ta zuado
-            tmp = tmp->next;
+        tmp = tmp->next;
     }
 }
 
 //Sends pong to the client that sent /ping
 void pong(ClientList *node, char message[])
 {
-    send(node->socket, message, MESSAGE_SIZE, 0);
+    int snd = send(node->socket, message, MESSAGE_SIZE, 0);
+    if (snd < 0)
+        errorMsg("ERROR writing to socket");
 }
 
 //Handles the client
@@ -148,6 +160,8 @@ void *clientHandler(void *info)
              << " joined the chatroom.\n";
         sprintf(sendBuffer, "%s joined the chatroom.\n", node->name);
         sendAllClients(root, node, sendBuffer);
+        usleep(WAIT_ACK);
+        checkAcknowledgement(root, node, sendBuffer);
     }
 
     //Conversation
@@ -164,14 +178,21 @@ void *clientHandler(void *info)
         if (rcv <= 0)
             errorMsg("ERROR reading from socket");
 
+        if (!strcmp(recvBuffer, "/ack"))
+        {
+            node->received = true;
+            node->attempts = 0;
+        }
         //sends that the client is quitting the chatroom
-        if (!strcmp(recvBuffer, "/quit"))
+        else if (!strcmp(recvBuffer, "/quit"))
         {
             cout << node->name << " (" << node->ip << ")"
                  << " (" << node->socket << ")"
                  << " left the chatroom.\n";
             sprintf(sendBuffer, "%s left the chatroom.\n", node->name);
             sendAllClients(root, node, sendBuffer);
+            usleep(WAIT_ACK);
+            checkAcknowledgement(root, node, sendBuffer);
             leave_flag = 1;
         }
         //if client sent /ping, the server answers with pong
@@ -184,6 +205,8 @@ void *clientHandler(void *info)
         {
             sprintf(sendBuffer, "%s: %s", node->name, recvBuffer);
             sendAllClients(root, node, sendBuffer);
+            usleep(WAIT_ACK);
+            checkAcknowledgement(root, node, sendBuffer);
         }
     }
 

@@ -16,6 +16,8 @@
 #define DEFAULT_IP      "127.0.0.1"
 #define MAX_CONNECTIONS  5
 
+#define WAIT_ACK        400
+
 typedef struct s_clientList ClientList;
 
 void errorMsg(const char *msg);
