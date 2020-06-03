@@ -71,6 +71,12 @@ void *receiveMsgHandler(void *sock)
         {
             cout << "\r" << buffer;
             str_print_nickname();
+
+            // Sends message to server, informing that the message was recevied
+            strcpy(buffer, "/ack");
+            int snd = send(*(int *)sock, buffer, strlen(buffer), MSG_DONTWAIT);
+            if (snd < 0)
+                errorMsg("ERROR writing to socket");
         }
     }
 }
