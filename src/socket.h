@@ -13,15 +13,11 @@
 #define MESSAGE_SIZE    2049
 #define NICKNAME_SIZE   10
 
-#define DEFAULT_IP      "127.0.0.1"
-#define MAX_CONNECTIONS  5
-
-#define WAIT_ACK        400000
-
-typedef struct s_clientList ClientList;
-
+//Shows error message and exit
 void errorMsg(const char *msg);
+
+//Handle with Ctrl C
 void ctrl_c_handler(int sig);
-ClientList *createNewNode(int server_fd, char *ip);
+
 
 #endif

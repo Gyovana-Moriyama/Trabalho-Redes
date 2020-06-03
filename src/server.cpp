@@ -1,6 +1,7 @@
 #include <iostream>
 #include <pthread.h>
 #include <signal.h>
+#include "server.hpp"
 #include "socket.h"
 
 using namespace std;
@@ -20,10 +21,43 @@ struct s_clientList
 typedef struct s_sendInfo
 {
     ClientList *node;
+    ClientList *now;
     char *message;
 } SendInfo;
 
-//Shows error message and exit
+ClientList *createNewNode(int server_fd, char *ip)
+{
+    ClientList *newNode = (ClientList *)malloc(sizeof(ClientList));
+    newNode->socket = server_fd;
+    newNode->received = false;
+    newNode->attempts = 0;
+    newNode->prev = NULL;
+    newNode->next = NULL;
+    strcpy(newNode->ip, ip);
+    strcpy(newNode->name, "\0");
+
+    return newNode;
+}
+
+void disconnectNode(ClientList *node, ClientList *now)
+{
+
+    close(node->socket);
+    if (node == now)
+    {
+        now = node->prev;
+        now->next = NULL;
+    }
+    //remove a middle node
+    else
+    {
+        node->prev->next = node->next;
+        node->next->prev = node->prev;
+    }
+
+    free(node);
+}
+
 void errorMsg(const char *msg)
 {
     perror(msg);
@@ -35,7 +69,6 @@ void ctrl_c_handler(int sig)
     cout << "To exit use /quit" << endl;
 }
 
-//Closes the server
 void *quitHandler(void *rootNode)
 {
     while (true)
@@ -66,53 +99,18 @@ void *quitHandler(void *rootNode)
     }
 }
 
-//Creates a new node
-ClientList *createNewNode(int server_fd, char *ip)
+bool pong(ClientList *node, char message[])
 {
-    ClientList *newNode = (ClientList *)malloc(sizeof(ClientList));
-    newNode->socket = server_fd;
-    newNode->received = false;
-    newNode->attempts = 0;
-    newNode->prev = NULL;
-    newNode->next = NULL;
-    strcpy(newNode->ip, ip);
-    strcpy(newNode->name, "\0");
-
-    return newNode;
-}
-
-void checkAcknowledgement(ClientList *root, ClientList *node, char message[])
-{
-    ClientList *tmp = root->next;
-    int snd;
-
-    while (tmp != NULL)
+    int snd = send(node->socket, message, MESSAGE_SIZE, 0);
+    if (snd < 0)
     {
-        if (node->socket != tmp->socket)
-        {
-            while (!tmp->received && tmp->attempts < 5)
-            {
-                snd = send(tmp->socket, message, MESSAGE_SIZE, 0);
-                if (snd < 0)
-                    errorMsg("ERROR writing to socket");
-                tmp->attempts++;
-                usleep(WAIT_ACK);
-            }
-
-            if (tmp->attempts == 5)
-            {
-                //Remove Node
-                close(tmp->socket);
-                tmp->prev->next = tmp->next;
-                tmp->next->prev = tmp->prev;
-
-                free(tmp);
-            }
-        }
+        cout << "Disconnecting " << node->name << endl;
+        return false;
     }
+
+    return true;
 }
 
-// Tries to send the message 5 times. If unsuccessful, disconnects client
 void *sendMessage(void *info)
 {
     SendInfo *sendInfo = (SendInfo *)info;
@@ -130,19 +128,18 @@ void *sendMessage(void *info)
     {
         cout << "Disconnecting " << sendInfo->node->name << endl;
         //Remove Node
-        close(sendInfo->node->socket);
-        sendInfo->node->prev->next = sendInfo->node->next;
-        sendInfo->node->next->prev = sendInfo->node->prev;
-
-        free(sendInfo->node);
+        disconnectNode(sendInfo->node, sendInfo->now);
     }
-
-    free(sendInfo->message);
-    free(sendInfo);
+    else if (sendInfo->node->received)
+    {
+        sendInfo->node->received = false;
+        sendInfo->node->attempts = 0;
+        free(sendInfo->message);
+        free(sendInfo);
+    }
 }
 
-//Send the message to all clients
-void sendAllClients(ClientList *root, ClientList *node, char message[])
+void sendAllClients(ClientList *root, ClientList *node, ClientList *now, char message[])
 {
     ClientList *tmp = root->next;
     int snd;
@@ -155,8 +152,9 @@ void sendAllClients(ClientList *root, ClientList *node, char message[])
             cout << "Send to: " << tmp->name << " >> " << message;
 
             pthread_t sendThread;
-            SendInfo *sendInfo = (SendInfo*)malloc(sizeof(SendInfo));
+            SendInfo *sendInfo = (SendInfo *)malloc(sizeof(SendInfo));
             sendInfo->node = tmp;
+            sendInfo->now = now;
             sendInfo->message = (char *)malloc(sizeof(char) * (MESSAGE_SIZE + NICKNAME_SIZE + 2));
             strcpy(sendInfo->message, message);
 
@@ -167,23 +165,6 @@ void sendAllClients(ClientList *root, ClientList *node, char message[])
     }
 }
 
-//Sends pong to the client that sent /ping
-void pong(ClientList *node, char message[])
-{
-    int snd = send(node->socket, message, MESSAGE_SIZE, 0);
-    if (snd < 0)
-    {
-        cout << "Disconnecting " << node->name << endl;
-        //Remove Node
-        close(node->socket);
-        node->prev->next = node->next;
-        node->next->prev = node->prev;
-
-        free(node);
-    }
-}
-
-//Handles the client
 void *clientHandler(void *info)
 {
     int leave_flag = 0;
@@ -208,9 +189,7 @@ void *clientHandler(void *info)
              << " (" << node->socket << ")"
              << " joined the chatroom.\n";
         sprintf(sendBuffer, "%s joined the chatroom.\n", node->name);
-        sendAllClients(root, node, sendBuffer);
-        // usleep(WAIT_ACK);
-        // checkAcknowledgement(root, node, sendBuffer);
+        sendAllClients(root, node, now, sendBuffer);
     }
 
     //Conversation
@@ -243,109 +222,28 @@ void *clientHandler(void *info)
                  << " (" << node->socket << ")"
                  << " left the chatroom.\n";
             sprintf(sendBuffer, "%s left the chatroom.\n", node->name);
-            sendAllClients(root, node, sendBuffer);
-            // usleep(WAIT_ACK);
-            // checkAcknowledgement(root, node, sendBuffer);
+            sendAllClients(root, node, now, sendBuffer);
             leave_flag = 1;
         }
         //if client sent /ping, the server answers with pong
         else if (!strcmp(recvBuffer, "/ping"))
         {
             sprintf(sendBuffer, "Server: pong\n");
-            pong(node, sendBuffer);
+            if (!pong(node, sendBuffer))
+            {
+                leave_flag = 1;
+            }
         }
         else
         {
             sprintf(sendBuffer, "%s: %s", node->name, recvBuffer);
-            sendAllClients(root, node, sendBuffer);
-            // usleep(WAIT_ACK);
-            // checkAcknowledgement(root, node, sendBuffer);
+            sendAllClients(root, node, now, sendBuffer);
         }
     }
 
     //Remove Node
-    close(node->socket);
-    if (node == now)
-    {
-        now = node->prev;
-        now->next = NULL;
-    }
-    //remove a middle node
-    else
-    {
-        node->prev->next = node->next;
-        node->next->prev = node->prev;
-    }
-
-    free(node);
+    disconnectNode(node, now);
 }
-
-// void *receiveMsg(void *info){
-//     int n;
-//     char buffer[MESSAGE_SIZE];
-//     int sock = ((int *)info)[0];
-//     int server_fd = ((int *)info)[1];
-
-//     while(true) {
-//         // Receives message
-//         bzero(buffer, MESSAGE_SIZE);
-//         n = recv(sock, buffer, MESSAGE_SIZE, 0);
-//         if(n <= 0) errorMsg("ERROR reading from socket");
-
-//         // // If receives the quit command, closes server and quit
-//         // if (!strcmp(buffer, "/quit\n")) {
-//         //     cout << "Quitting";
-//         //     quit(sock, server_fd);
-//         // }
-
-//         if(!strcmp(buffer, "/ping")){
-//             // cout << "pong\n";
-//             // sendMsg(info);
-//         }
-//         else if(!strcmp(buffer, "/connect")){
-//             cout << "Client connected\n";
-//         }
-//         else{
-//             cout << "Incoming >> " << buffer << "\n";
-
-//         }
-//     }
-// }
-
-// void *sendMsg(void *info) {
-//     int n;
-//     char buffer[MESSAGE_SIZE];
-//     string message;
-
-//     int sock = ((int *)info)[0];
-//     int server_fd = ((int *)info)[1];
-
-//     while(true){
-//         // Gets input
-//         getline(cin, message);
-
-//         // Calculates how many parts the message will be divided into
-//         int div = (message.length() > MESSAGE_SIZE) ? (message.length()/MESSAGE_SIZE) : 0;
-
-//         for(int i=0; i<=div; i++) {
-//             // Clear buffer
-//             bzero(buffer, MESSAGE_SIZE);
-
-//             // Copy message limited by MESSAGE_SIZE
-//             message.copy(buffer, MESSAGE_SIZE, i*MESSAGE_SIZE);
-
-//             // Sends message
-//             n = send(sock, buffer, strlen(buffer), MSG_DONTWAIT);
-//             if(n < 0) errorMsg("ERROR writing to socket");
-
-//             // // Quits if receive quit message
-//             // if (!strcmp(buffer, "/quit")) {
-//             //     cout << "Quitting";
-//             //     quit(sock, server_fd);
-//             // }
-//         }
-//     }
-// }
 
 int main(int argc, char const *argv[])
 {
@@ -356,15 +254,11 @@ int main(int argc, char const *argv[])
 
     //Create socket file descriptor
     if ((server_fd = socket(AF_INET, SOCK_STREAM, PROTOCOL)) < 0)
-    {
         errorMsg("Socket failed.");
-    }
 
     //Forcefully attaching socket to the port 8080
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)))
-    {
         errorMsg("setsockopt");
-    }
 
     struct sockaddr_in server_addr, client_addr;
     int s_addrlen = sizeof(server_addr);
@@ -382,16 +276,12 @@ int main(int argc, char const *argv[])
 
     //Bind the socket to the current IP address on port
     if (bind(server_fd, (struct sockaddr *)&server_addr, s_addrlen) < 0)
-    {
         errorMsg("bind failed");
-    }
 
     //Tells the socket to listen to the incoming connections
     //maximum size for the backlog queue is 5
     if (listen(server_fd, MAX_CONNECTIONS) < 0)
-    {
         errorMsg("listen");
-    }
 
     //Print server IP
     getsockname(server_fd, (struct sockaddr *)&server_addr, (socklen_t *)&s_addrlen);
@@ -404,9 +294,7 @@ int main(int argc, char const *argv[])
     //Thread to catch server input, in this case, is used to catch the '/quit'
     pthread_t inputThreadId;
     if (pthread_create(&inputThreadId, NULL, quitHandler, (void *)root) != 0)
-    {
         errorMsg("input thread ERROR");
-    }
 
     //Accepts new clients
     while (true)
@@ -437,41 +325,8 @@ int main(int argc, char const *argv[])
             cout << "Create pthread error" << endl;
 
             //Remove Node
-            close(node->socket);
-            if (node == now)
-            {
-                now = node->prev;
-                now->next = NULL;
-            }
-            //remove a middle node
-            else
-            {
-                node->prev->next = node->next;
-                node->next->prev = node->prev;
-            }
-
-            free(node);
+            disconnectNode(node, now);
         }
     }
-
-    // //Actually accepts an incoming connection
-    // if ((new_socket = accept(server_fd, (struct sockaddr *)&server_addr, (socklen_t *)&s_addrlen)) < 0)
-    // {
-    //     errorMsg("accept ERROR");
-    // }
-
-    // // Array with the informations that will be passed as argument to threads
-    // int info[2] = {new_socket, server_fd};
-
-    // Creates 2 threads. One used to receive messages, and other to send messages.
-    // pthread_t threads[NUM_THREADS];
-
-    // pthread_create(&threads[0], NULL, receiveMsg, info);
-    // pthread_create(&threads[1], NULL, sendMsg, info);
-
-    // Keeps threads running
-    // while (true)
-    //     ;
-
     return 0;
 }

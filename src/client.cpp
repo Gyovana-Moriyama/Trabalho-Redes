@@ -1,6 +1,7 @@
 #include <iostream>
 #include <pthread.h>
 #include <signal.h>
+#include "client.hpp"
 #include "socket.h"
 
 using namespace std;
@@ -8,33 +9,31 @@ using namespace std;
 //Global variables
 char nickname[MESSAGE_SIZE] = {};
 
-//Shows error message and exit
+
 void errorMsg(const char *msg)
 {
     perror(msg);
     exit(1);
 }
-//Closes client
+
 void quit(int sock)
 {
     close(sock);
     exit(0);
 }
 
-//Handle with Ctrl C
+
 void ctrl_c_handler(int sig)
 {
     cout << "To exit use /quit" << endl;
 }
 
-//Prints the user nickname before writes the message
 void str_print_nickname()
 {
     printf("\r%s: ", nickname);
     fflush(stdout);
 }
 
-//Put the newchar at the end of a string
 void str_trim(char *str, char newchar)
 {
     int n = strlen(str);
@@ -51,7 +50,6 @@ void str_trim(char *str, char newchar)
         str[n - 1] = newchar;
 }
 
-//Prints the received message
 void *receiveMsgHandler(void *sock)
 {
     char buffer[MESSAGE_SIZE + NICKNAME_SIZE + 2] = {};
@@ -82,7 +80,6 @@ void *receiveMsgHandler(void *sock)
     }
 }
 
-// Gets input and send message to server
 void *sendMsgHandler(void *sock)
 {
     char buffer[MESSAGE_SIZE] = {};
@@ -124,57 +121,6 @@ void *sendMsgHandler(void *sock)
         }
     }
 }
-// void *receiveMsg(void *sock){
-//     int n;
-//     char buffer[MESSAGE_SIZE];
-
-//     while(true) {
-//         // Receives message
-//         bzero(buffer, MESSAGE_SIZE);
-//         n = recv(*(int *)sock, buffer, MESSAGE_SIZE, 0);
-//         if(n <= 0) errorMsg("ERROR reading from socket");
-
-//         // Quits if receive quit message
-//         if (!strcmp(buffer, "/quit\n")) {
-//             cout << "Quitting";
-//             quit(*(int *)sock);
-//         }
-
-//         cout << "Incoming >> " << buffer << "\n";
-//     }
-// }
-
-// void *sendMsg(void *sock) {
-//     int n;
-//     char buffer[MESSAGE_SIZE];
-//     string message;
-
-//     while(true){
-//         // Gets input
-//         getline(cin, message);
-
-//         // Calculates how many parts the message will be divided into
-//         int div = (message.length() > MESSAGE_SIZE) ? (message.length()/MESSAGE_SIZE) : 0;
-
-//         for(int i=0; i<=div; i++) {
-//             // Clear buffer
-//             bzero(buffer, MESSAGE_SIZE);
-
-//             // Copy message limited by MESSAGE_SIZE
-//             message.copy(buffer, MESSAGE_SIZE, i*MESSAGE_SIZE);
-
-//             // Sends message
-//             n = send(*(int *)sock, buffer, strlen(buffer), MSG_DONTWAIT);
-//             if(n < 0) errorMsg("ERROR writing to socket");
-
-//             // Quits if receive quit message
-//             if (!strcmp(buffer, "/quit")) {
-//                 cout << "Quitting";
-//                 quit(*(int *)sock);
-//             }
-//         }
-//     }
-// }
 
 int main(int argc, char const *argv[])
 {
@@ -192,18 +138,12 @@ int main(int argc, char const *argv[])
     {
         cout << "Please enter your nickname (1~9 characters): ";
         if (fgets(nickname, MESSAGE_SIZE - 1, stdin) != NULL)
-        {
             str_trim(nickname, '\0');
-        }
     } while (strlen(nickname) < 1 || strlen(nickname) > NICKNAME_SIZE - 1);
 
     //Create socket file descriptor
     if ((sock = socket(AF_INET, SOCK_STREAM, PROTOCOL)) < 0)
-    {
         errorMsg("\nSocket creation error \n");
-        // cout << "\nSocket creation error \n";
-        // return -1;
-    }
 
     bzero((char *)&server_addr, s_addrlen);
     bzero((char *)&client_addr, c_addrlen);
@@ -221,9 +161,7 @@ int main(int argc, char const *argv[])
     {
         cout << "Please enter server address (default: " << DEFAULT_IP << ").\nFor default enter /default: ";
         if (fgets(ip, MESSAGE_SIZE - 1, stdin) != NULL)
-        {
             str_trim(ip, '\0');
-        }
 
     } while (strlen(ip) < 8 || strlen(ip) > 9);
 
@@ -241,11 +179,7 @@ int main(int argc, char const *argv[])
     }
 
     if (addr <= 0)
-    {
         errorMsg("\nInvalid address/ Address not supported\n");
-        // cout << "\nInvalid address/ Address not supported\n";
-        // return -1;
-    }
 
     //commands menu
     cout << "Connect: /connect\nQuit: /quit\nPing: /ping\n";
@@ -275,11 +209,7 @@ int main(int argc, char const *argv[])
 
     //Connects to server
     if (connect(sock, (struct sockaddr *)&server_addr, s_addrlen) < 0)
-    {
         errorMsg("\nConnection failed\n");
-        // cout << "\nConnection failed\n";
-        // return -1;
-    }
 
     //Names
     getsockname(sock, (struct sockaddr *)&client_addr, (socklen_t *)&c_addrlen);
@@ -293,17 +223,11 @@ int main(int argc, char const *argv[])
     if (pthread_create(&recvMsgThread, NULL, receiveMsgHandler, &sock) != 0)
     {
         errorMsg("\nCreate pthread error\n");
-        // cout << "Create pthread error\n";
-        // return -1;
     }
 
     pthread_t sendMsgThread;
     if (pthread_create(&sendMsgThread, NULL, sendMsgHandler, &sock) != 0)
-    {
         errorMsg("\nCreate pthread error\n");
-        // cout << "Create pthread error";
-        // return -1;
-    }
 
     // Keeps threads running
     pthread_join(recvMsgThread, NULL);
