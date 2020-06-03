@@ -116,19 +116,19 @@ void checkAcknowledgement(ClientList *root, ClientList *node, char message[])
 void *sendMessage(void *info)
 {
     SendInfo *sendInfo = (SendInfo *)info;
+    int snd;
 
     do
     {
-        int snd = send(sendInfo->node->socket, sendInfo->message, MESSAGE_SIZE + NICKNAME_SIZE + 2, 0);
-        if (snd < 0)
-            errorMsg("ERROR writing to socket");
+        snd = send(sendInfo->node->socket, sendInfo->message, MESSAGE_SIZE + NICKNAME_SIZE + 2, 0);
         sendInfo->node->attempts++;
         usleep(WAIT_ACK);
-    } while (!sendInfo->node->received && sendInfo->node->attempts < 5);
+    } while (snd >= 0 && !sendInfo->node->received && sendInfo->node->attempts < 5);
 
     // Disconnects client
-    if (sendInfo->node->attempts == 5)
+    if (sendInfo->node->attempts == 5 || snd < 0)
     {
+        cout << "Disconnecting " << sendInfo->node->name << endl;
         //Remove Node
         close(sendInfo->node->socket);
         sendInfo->node->prev->next = sendInfo->node->next;
@@ -172,7 +172,15 @@ void pong(ClientList *node, char message[])
 {
     int snd = send(node->socket, message, MESSAGE_SIZE, 0);
     if (snd < 0)
-        errorMsg("ERROR writing to socket");
+    {
+        cout << "Disconnecting " << node->name << endl;
+        //Remove Node
+        close(node->socket);
+        node->prev->next = node->next;
+        node->next->prev = node->prev;
+
+        free(node);
+    }
 }
 
 //Handles the client
@@ -217,7 +225,10 @@ void *clientHandler(void *info)
         int rcv = recv(node->socket, recvBuffer, MESSAGE_SIZE, 0);
 
         if (rcv <= 0)
-            errorMsg("ERROR reading from socket");
+        {
+            leave_flag = 1;
+            continue;
+        }
 
         if (!strcmp(recvBuffer, "/ack"))
         {
@@ -403,7 +414,8 @@ int main(int argc, char const *argv[])
 
         if ((client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&c_addrlen)) < 0)
         {
-            errorMsg("accept ERROR");
+            cout << "Error accepting client" << endl;
+            continue;
         }
 
         //Print client IP
@@ -422,7 +434,23 @@ int main(int argc, char const *argv[])
         pthread_t id;
         if (pthread_create(&id, NULL, clientHandler, (void *)&info) != 0)
         {
-            errorMsg("Create pthread error\n");
+            cout << "Create pthread error" << endl;
+
+            //Remove Node
+            close(node->socket);
+            if (node == now)
+            {
+                now = node->prev;
+                now->next = NULL;
+            }
+            //remove a middle node
+            else
+            {
+                node->prev->next = node->next;
+                node->next->prev = node->prev;
+            }
+
+            free(node);
         }
     }
 
