@@ -68,6 +68,7 @@ void *receiveMsgHandler(void *sock)
         else
         {
             cout << "\r" << buffer;
+            fflush(stdout);
             str_print_nickname();
 
             // Sends message to server, informing that the message was received

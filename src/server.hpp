@@ -11,7 +11,7 @@ typedef struct s_clientList ClientList;
 ClientList *createNewNode(int server_fd, char *ip);
 
 //Disconnects a specific node
-void disconnectNode(ClientList *node, ClientList *now);
+void disconnectNode(ClientList *node);
 
 //Closes the server
 void *quitHandler(void *rootNode);
@@ -23,7 +23,7 @@ bool pong(ClientList *node, char message[]);
 void *sendMessage(void *info);
 
 //Send the message to all clients
-void sendAllClients(ClientList *root, ClientList *node, ClientList *now,char message[]);
+void sendAllClients(ClientList *root, ClientList *node, char message[]);
 
 //Handles the client
 void *clientHandler(void *info);
