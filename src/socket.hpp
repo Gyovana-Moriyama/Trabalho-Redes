@@ -7,11 +7,12 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-#define PORT            8080
-#define PROTOCOL        0
+#define PORT                8080
+#define PROTOCOL            0
 
-#define MESSAGE_SIZE    2049
-#define NICKNAME_SIZE   10
+#define MESSAGE_SIZE        2049
+#define NICKNAME_SIZE       10
+#define CHANNEL_NAME_SIZE   201
 
 //Shows error message and exit
 void errorMsg(const char *msg);

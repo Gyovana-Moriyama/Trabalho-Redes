@@ -6,6 +6,7 @@
 #define WAIT_ACK        400000
 
 typedef struct s_clientList ClientList;
+typedef struct s_channelList ChannelList;
 
 //Creates a new node
 ClientList *createNewNode(int server_fd, char *ip);

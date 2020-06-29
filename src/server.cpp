@@ -2,7 +2,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include "server.hpp"
-#include "socket.h"
+#include "socket.hpp"
 
 using namespace std;
 
@@ -17,6 +17,7 @@ struct s_clientList
     char ip[16];
     char name[NICKNAME_SIZE];
     bool isAdmin;
+    int channels;
 };
 
 typedef struct s_sendInfo
@@ -25,7 +26,16 @@ typedef struct s_sendInfo
     char *message;
 } SendInfo;
 
-ClientList *createNewNode(int sock_fd, char *ip)
+struct s_channelList
+{
+    struct s_channelList *prev;
+    struct s_channelList *next;
+    char name[CHANNEL_NAME_SIZE];
+    ClientList *clients;
+};
+
+
+ClientList *createClient(int sock_fd, char *ip)
 {
     ClientList *newNode = (ClientList *)malloc(sizeof(ClientList));
     newNode->socket = sock_fd;
@@ -35,6 +45,20 @@ ClientList *createNewNode(int sock_fd, char *ip)
     newNode->next = NULL;
     strcpy(newNode->ip, ip);
     strcpy(newNode->name, "\0");
+    newNode->isAdmin = false;
+    newNode->channels = 0;
+
+    return newNode;
+}
+
+ChannelList *createChannelNode(char* name, ClientList *admin)
+{
+    ChannelList *newNode = (ChannelList *)malloc(sizeof(ChannelList));
+
+    newNode->prev = NULL;
+    newNode->next = NULL;
+    strcpy(newNode->name, name);
+    newNode->clients = admin;
 
     return newNode;
 }
@@ -59,6 +83,24 @@ void disconnectNode(ClientList *node)
 {
     cout << "Disconnecting " << node->name << endl;
     close(node->socket);
+    if (node->next == NULL)
+    {     
+        node->prev->next = NULL;
+    }
+    //remove a middle node
+    else
+    {
+        node->prev->next = node->next;
+        node->next->prev = node->prev;
+    }
+
+    free(node);
+}
+
+void deleteChannel(ChannelList *node)
+{
+    cout << "Deleting " << node->name << endl;
+
     if (node->next == NULL)
     {     
         node->prev->next = NULL;
@@ -331,7 +373,7 @@ int main(int argc, char const *argv[])
     cout << "Start Server on: " << inet_ntoa(server_addr.sin_addr) << ": " << ntohs(server_addr.sin_port) << "\n";
 
     //Initial linked list for clients, the root is the server
-    ClientList *root = createNewNode(server_fd, inet_ntoa(server_addr.sin_addr));
+    ClientList *root = createClient(server_fd, inet_ntoa(server_addr.sin_addr));
 
     //Thread to catch server input, in this case, is used to catch the '/quit'
     pthread_t inputThreadId;
@@ -353,13 +395,13 @@ int main(int argc, char const *argv[])
         cout << "Client " << inet_ntoa(client_addr.sin_addr) << " : " << ntohs(client_addr.sin_port) << " joined.\n";
 
         //Create new client node and append to linked list
-        ClientList *node = createNewNode(client_fd, inet_ntoa(client_addr.sin_addr));
+        ClientList *node = createClient(client_fd, inet_ntoa(client_addr.sin_addr));
 
         //Naming
         recv(node->socket, nickname, NICKNAME_SIZE, 0);
         strcpy(node->name, nickname);
-        ClientList *last = root;
 
+        ClientList *last = root;
         while (last->next != NULL)
         {
             last = last->next;
