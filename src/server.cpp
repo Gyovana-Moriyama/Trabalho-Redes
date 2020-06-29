@@ -16,6 +16,7 @@ struct s_clientList
     struct s_clientList *next;
     char ip[16];
     char name[NICKNAME_SIZE];
+    bool isAdmin;
 };
 
 typedef struct s_sendInfo
@@ -183,6 +184,9 @@ void *clientHandler(void *info)
     ClientList *root = ((ClientList **)info)[0];
     ClientList *node = ((ClientList **)info)[1];
 
+    char command[MESSAGE_SIZE] = {};
+    char argument[MESSAGE_SIZE] = {};
+
 
     //Announces the client that joined the chatroom
     cout << node->name << " (" << node->ip << ")"
@@ -199,6 +203,8 @@ void *clientHandler(void *info)
 
         bzero(recvBuffer, MESSAGE_SIZE);
         bzero(sendBuffer, MESSAGE_SIZE);
+        bzero(command, MESSAGE_SIZE);
+        bzero(argument, MESSAGE_SIZE);
 
         int rcv = recv(node->socket, recvBuffer, MESSAGE_SIZE, 0);
 
@@ -208,29 +214,66 @@ void *clientHandler(void *info)
             continue;
         }
 
-        if (!strcmp(recvBuffer, "/ack"))
+        if (recvBuffer[0] == '/') 
         {
-            node->received = true;
-            node->attempts = 0;
-            cout << node->name << " received the message" << endl;
-        }
-        //sends that the client is quitting the chatroom
-        else if (!strcmp(recvBuffer, "/quit"))
-        {
-            cout << node->name << " (" << node->ip << ")"
-                 << " (" << node->socket << ")"
-                 << " left the chatroom.\n";
-            sprintf(sendBuffer, "%s left the chatroom.\n", node->name);
-            sendAllClients(root, node, sendBuffer);
-            leave_flag = 1;
-        }
-        //if client sent /ping, the server answers with pong
-        else if (!strcmp(recvBuffer, "/ping"))
-        {
-            sprintf(sendBuffer, "Server: pong\n");
-            if (!pong(node, sendBuffer))
+            sscanf(recvBuffer, "%s %s", command, argument);
+
+            if (!strcmp(command, "/ack"))
             {
+                node->received = true;
+                node->attempts = 0;
+                cout << node->name << " received the message" << endl;
+            }
+            //sends that the client is quitting the chatroom
+            else if (!strcmp(command, "/quit"))
+            {
+                cout << node->name << " (" << node->ip << ")"
+                    << " (" << node->socket << ")"
+                    << " left the chatroom.\n";
+                sprintf(sendBuffer, "%s left the chatroom.\n", node->name);
+                sendAllClients(root, node, sendBuffer);
                 leave_flag = 1;
+            }
+            //if client sent /ping, the server answers with pong
+            else if (!strcmp(command, "/ping"))
+            {
+                sprintf(sendBuffer, "Server: pong\n");
+                if (!pong(node, sendBuffer))
+                {
+                    leave_flag = 1;
+                }
+            }
+            else if (!strcmp(command, "/join"))
+            {
+                // join(argument)
+            }
+            else if (!strcmp(command, "/whois"))
+            {
+                if (node->isAdmin)
+                {
+                    // coisas()
+                }
+            }
+            else if (!strcmp(command, "/kick"))
+            {
+                if (node->isAdmin)
+                {
+                    // coisas()
+                }
+            }
+            else if (!strcmp(command, "/mute"))
+            {
+                if (node->isAdmin)
+                {
+                    // coisas()
+                }
+            }
+            else if (!strcmp(command, "/unmute"))               
+            {
+                if (node->isAdmin)
+                {
+                    // coisas()
+                }
             }
         }
         else

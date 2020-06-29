@@ -102,11 +102,8 @@ void *sendMsgHandler(void *sock)
             // Copy message limited by MESSAGE_SIZE
             message.copy(buffer, MESSAGE_SIZE - 1, (i * (MESSAGE_SIZE - 1)));
 
-            //put /0 at the end of the command
-            if (!strcmp(buffer, "/ping") || !strcmp(buffer, "/quit"))
-                str_trim(buffer, '\0');
-            //Put \n at the end of the messages
-            else
+            //Put \n at the end of the non command messages
+            if (buffer[0] != '/')
                 str_trim(buffer, '\n');
             // Sends message
             snd = send(*(int *)sock, buffer, strlen(buffer), MSG_DONTWAIT);
