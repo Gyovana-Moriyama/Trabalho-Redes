@@ -26,6 +26,13 @@ typedef struct s_sendInfo
     char *message;
 } SendInfo;
 
+typedef struct s_threadInfo
+{
+    ClientList *clientRoot;
+    ClientList *clientNode;
+    ChannelList *channelRoot;
+} ThreadInfo;
+
 struct s_channelList
 {
     struct s_channelList *prev;
@@ -33,7 +40,6 @@ struct s_channelList
     char name[CHANNEL_NAME_SIZE];
     ClientList *clients;
 };
-
 
 ClientList *createClient(int sock_fd, char *ip)
 {
@@ -51,7 +57,7 @@ ClientList *createClient(int sock_fd, char *ip)
     return newNode;
 }
 
-ChannelList *createChannelNode(char* name, ClientList *admin)
+ChannelList *createChannelNode(char *name, ClientList *admin)
 {
     ChannelList *newNode = (ChannelList *)malloc(sizeof(ChannelList));
 
@@ -84,7 +90,7 @@ void disconnectNode(ClientList *node)
     cout << "Disconnecting " << node->name << endl;
     close(node->socket);
     if (node->next == NULL)
-    {     
+    {
         node->prev->next = NULL;
     }
     //remove a middle node
@@ -102,7 +108,7 @@ void deleteChannel(ChannelList *node)
     cout << "Deleting " << node->name << endl;
 
     if (node->next == NULL)
-    {     
+    {
         node->prev->next = NULL;
     }
     //remove a middle node
@@ -155,6 +161,7 @@ void *quitHandler(void *rootNode)
         }
     }
 }
+
 
 bool pong(ClientList *node, char message[])
 {
@@ -223,19 +230,16 @@ void *clientHandler(void *info)
     int leave_flag = 0;
     char recvBuffer[MESSAGE_SIZE] = {};
     char sendBuffer[MESSAGE_SIZE + NICKNAME_SIZE + 2] = {};
-    ClientList *root = ((ClientList **)info)[0];
-    ClientList *node = ((ClientList **)info)[1];
-
+    ThreadInfo *tInfo = (ThreadInfo *)info;
     char command[MESSAGE_SIZE] = {};
     char argument[MESSAGE_SIZE] = {};
 
-
     //Announces the client that joined the chatroom
-    cout << node->name << " (" << node->ip << ")"
-         << " (" << node->socket << ")"
+    cout << tInfo->clientNode->name << " (" << tInfo->clientNode->ip << ")"
+         << " (" << tInfo->clientNode->socket << ")"
          << " joined the chatroom.\n";
-    sprintf(sendBuffer, "%s joined the chatroom.\n", node->name);
-    sendAllClients(root, node, sendBuffer);
+    sprintf(sendBuffer, "%s joined the chatroom.\n", tInfo->clientNode->name);
+    sendAllClients(tInfo->clientRoot, tInfo->clientNode, sendBuffer);
 
     //Conversation
     while (true)
@@ -248,7 +252,7 @@ void *clientHandler(void *info)
         bzero(command, MESSAGE_SIZE);
         bzero(argument, MESSAGE_SIZE);
 
-        int rcv = recv(node->socket, recvBuffer, MESSAGE_SIZE, 0);
+        int rcv = recv(tInfo->clientNode->socket, recvBuffer, MESSAGE_SIZE, 0);
 
         if (rcv <= 0)
         {
@@ -256,63 +260,71 @@ void *clientHandler(void *info)
             continue;
         }
 
-        if (recvBuffer[0] == '/') 
+        if (recvBuffer[0] == '/')
         {
             sscanf(recvBuffer, "%s %s", command, argument);
 
             if (!strcmp(command, "/ack"))
             {
-                node->received = true;
-                node->attempts = 0;
-                cout << node->name << " received the message" << endl;
+                tInfo->clientNode->received = true;
+                tInfo->clientNode->attempts = 0;
+                cout << tInfo->clientNode->name << " received the message" << endl;
             }
             //sends that the client is quitting the chatroom
             else if (!strcmp(command, "/quit"))
             {
-                cout << node->name << " (" << node->ip << ")"
-                    << " (" << node->socket << ")"
-                    << " left the chatroom.\n";
-                sprintf(sendBuffer, "%s left the chatroom.\n", node->name);
-                sendAllClients(root, node, sendBuffer);
+                cout << tInfo->clientNode->name << " (" << tInfo->clientNode->ip << ")"
+                     << " (" << tInfo->clientNode->socket << ")"
+                     << " left the chatroom.\n";
+                sprintf(sendBuffer, "%s left the chatroom.\n", tInfo->clientNode->name);
+                sendAllClients(tInfo->clientRoot, tInfo->clientNode, sendBuffer);
                 leave_flag = 1;
             }
             //if client sent /ping, the server answers with pong
             else if (!strcmp(command, "/ping"))
             {
                 sprintf(sendBuffer, "Server: pong\n");
-                if (!pong(node, sendBuffer))
+                if (!pong(tInfo->clientNode, sendBuffer))
                 {
                     leave_flag = 1;
                 }
             }
             else if (!strcmp(command, "/join"))
             {
-                // join(argument)
+                if(argument[0] == '&' || argument[0] == '#')
+                {
+                    // join(argument)
+
+                }
+                else
+                {
+                    //nome inválido
+                }
             }
             else if (!strcmp(command, "/whois"))
             {
-                if (node->isAdmin)
+                if (tInfo->clientNode->isAdmin)
                 {
                     // coisas()
                 }
             }
             else if (!strcmp(command, "/kick"))
             {
-                if (node->isAdmin)
+                if (tInfo->clientNode->isAdmin)
                 {
                     // coisas()
                 }
             }
             else if (!strcmp(command, "/mute"))
             {
-                if (node->isAdmin)
+                if (tInfo->clientNode->isAdmin)
                 {
                     // coisas()
                 }
             }
-            else if (!strcmp(command, "/unmute"))               
+            else if (!strcmp(command, "/unmute"))
             {
-                if (node->isAdmin)
+                if (tInfo->clientNode->isAdmin)
                 {
                     // coisas()
                 }
@@ -320,13 +332,13 @@ void *clientHandler(void *info)
         }
         else
         {
-            sprintf(sendBuffer, "%s: %s", node->name, recvBuffer);
-            sendAllClients(root, node, sendBuffer);
+            sprintf(sendBuffer, "%s: %s", tInfo->clientNode->name, recvBuffer);
+            sendAllClients(tInfo->clientRoot, tInfo->clientNode, sendBuffer);
         }
     }
 
-    //Remove Node
-    disconnectNode(node);
+    //Remove node
+    disconnectNode(tInfo->clientNode);
 }
 
 int main(int argc, char const *argv[])
@@ -373,11 +385,13 @@ int main(int argc, char const *argv[])
     cout << "Start Server on: " << inet_ntoa(server_addr.sin_addr) << ": " << ntohs(server_addr.sin_port) << "\n";
 
     //Initial linked list for clients, the root is the server
-    ClientList *root = createClient(server_fd, inet_ntoa(server_addr.sin_addr));
+    ClientList *clientRoot = createClient(server_fd, inet_ntoa(server_addr.sin_addr));
+
+    ChannelList *channelRoot = createChannelNode("#server", clientRoot);
 
     //Thread to catch server input, in this case, is used to catch the '/quit'
     pthread_t inputThreadId;
-    if (pthread_create(&inputThreadId, NULL, quitHandler, (void *)root) != 0)
+    if (pthread_create(&inputThreadId, NULL, quitHandler, (void *)clientRoot) != 0)
         errorMsg("input thread ERROR");
 
     //Accepts new clients
@@ -401,18 +415,23 @@ int main(int argc, char const *argv[])
         recv(node->socket, nickname, NICKNAME_SIZE, 0);
         strcpy(node->name, nickname);
 
-        ClientList *last = root;
+        ClientList *last = clientRoot;
         while (last->next != NULL)
         {
             last = last->next;
         }
-    
+
         node->prev = last;
         last->next = node;
-        
+
         bzero(nickname, NICKNAME_SIZE);
 
-        ClientList *info[2] = {root, node};
+        // ClientList *info[2] = {clientRoot, node};
+
+        ThreadInfo *info = (ThreadInfo *)malloc(sizeof(ThreadInfo));
+        info->clientRoot = clientRoot;
+        info->clientNode = node;
+        info->channelRoot = channelRoot;
 
         //create a new thread for each client
         pthread_t id;

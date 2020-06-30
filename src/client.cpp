@@ -2,7 +2,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include "client.hpp"
-#include "socket.h"
+#include "socket.hpp"
 
 using namespace std;
 
