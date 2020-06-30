@@ -17,7 +17,7 @@ struct s_clientList
     char ip[16];
     char name[NICKNAME_SIZE];
     bool isAdmin;
-    int channels;
+    char channels[MAX_CHANNELS][CHANNEL_NAME_SIZE];
 };
 
 typedef struct s_sendInfo
@@ -52,7 +52,11 @@ ClientList *createClient(int sock_fd, char *ip)
     strcpy(newNode->ip, ip);
     strcpy(newNode->name, "\0");
     newNode->isAdmin = false;
-    newNode->channels = 0;
+    
+    for (int i = 0; i < MAX_CHANNELS; i++)  
+    {
+        newNode->channels[i][0] = '\0';
+    }
 
     return newNode;
 }
@@ -224,6 +228,45 @@ void sendAllClients(ClientList *root, ClientList *node, char message[])
         tmp = tmp->next;
     }
 }
+
+void join(char *channel, ChannelList *root, ClientList *client)
+{
+    ChannelList *tmp = root->next;
+    bool createNewChannel = true;
+
+    while (tmp->next != NULL)
+    {
+        if (!strcmp(channel, tmp->name))
+        {
+            createNewChannel = false;
+            break;
+        }
+
+        tmp = tmp->next;
+    }
+
+    if (createNewChannel)
+    {
+        // createChannel();
+    }
+    else 
+    {
+        bool isInChannel = false;
+        for (int i = 0; i < MAX_CHANNELS; i++)
+        {
+            // if (!strcmp(client->channels))
+        }
+
+
+        ClientList *newClient = createClient(client->socket, client->ip);
+        newClient->next = tmp->clients->next;
+        newClient->prev = tmp->clients;
+        tmp->clients->next = newClient;
+
+    }
+}
+
+
 
 void *clientHandler(void *info)
 {

@@ -2,6 +2,7 @@
 #define SERVER_H
 
 #define MAX_CONNECTIONS  5
+#define MAX_CHANNELS     10
 
 #define WAIT_ACK        400000
 
