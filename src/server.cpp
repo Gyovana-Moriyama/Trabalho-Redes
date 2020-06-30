@@ -142,6 +142,22 @@ void ctrl_c_handler(int sig)
     cout << "To exit use /quit" << endl;
 }
 
+void str_trim(char *str, char newchar)
+{
+    int n = strlen(str);
+    //if the newchar is already at the end of the string, does not need to put
+    if (newchar == str[n - 1])
+    {
+        return;
+    }
+    //is the last character of the string is a alphabet letter, put the newchar after it
+    if (isalnum(str[n - 1]) != 0)
+        str[n] = newchar;
+    //if is not, substitue the last character
+    else
+        str[n - 1] = newchar;
+}
+
 void *quitHandler(void *rootNode)
 {
     while (true)
@@ -282,12 +298,12 @@ void join(char *channel, ChannelList *root, ClientList *client)
             newClient->next = tmp->clients->next;
             newClient->prev = tmp->clients;
             tmp->clients->next = newClient;
-            
+
             client->mainNode->activeChannel = tmp;
 
             for (int i = 0; i < MAX_CHANNELS; i++)
             {
-                if(client->mainNode->channels[i][0] == '\0')
+                if (client->mainNode->channels[i][0] == '\0')
                     strcpy(client->mainNode->channels[i], channel);
 
                 strcpy(newClient->channels[i], client->mainNode->channels[i]);
@@ -326,6 +342,7 @@ void mute(ClientList *admin, char *username, bool mute)
         if (!strcmp(tmp->name, username))
         {
             tmp->muted = mute;
+            //tell user that is muted
         }
         tmp = tmp->next;
     }
@@ -344,8 +361,8 @@ void kick(ClientList *admin, char *username)
 
             for (int i = 0; i < MAX_CHANNELS; i++)
             {
-                
             }
+
         }
         tmp = tmp->next;
     }
@@ -388,7 +405,10 @@ void *clientHandler(void *info)
 
         if (recvBuffer[0] == '/')
         {
-            sscanf(recvBuffer, "%s %s\n", command, argument);
+            sscanf(recvBuffer, "%s %s", command, argument);
+
+            str_trim(command, '\0');
+            str_trim(argument, '\0');
 
             if (!strcmp(command, "/ack"))
             {
@@ -437,6 +457,7 @@ void *clientHandler(void *info)
                 }
                 else
                 {
+                    //not admin
                 }
             }
             else if (!strcmp(command, "/kick"))
@@ -445,6 +466,10 @@ void *clientHandler(void *info)
                 {
                     // coisas()
                 }
+                else
+                {
+                    //not admin
+                }
             }
             else if (!strcmp(command, "/mute"))
             {
@@ -452,12 +477,20 @@ void *clientHandler(void *info)
                 {
                     mute(tInfo->clientNode, argument, true);
                 }
+                else
+                {
+                    //not admin
+                }
             }
             else if (!strcmp(command, "/unmute"))
             {
                 if (tInfo->clientNode->isAdmin)
                 {
                     mute(tInfo->clientNode, argument, false);
+                }
+                else
+                {
+                    //not admin
                 }
             }
         }
@@ -557,8 +590,6 @@ int main(int argc, char const *argv[])
 
         bzero(nickname, NICKNAME_SIZE);
 
-        // ClientList *info[2] = {clientRoot, node};
-
         ThreadInfo *info = (ThreadInfo *)malloc(sizeof(ThreadInfo));
         info->clientRoot = clientRoot;
         info->clientNode = node;
@@ -566,7 +597,7 @@ int main(int argc, char const *argv[])
 
         //create a new thread for each client
         pthread_t id;
-        if (pthread_create(&id, NULL, clientHandler, (void *)&info) != 0)
+        if (pthread_create(&id, NULL, clientHandler, (void *)info) != 0)
         {
             cout << "Create pthread error" << endl;
 

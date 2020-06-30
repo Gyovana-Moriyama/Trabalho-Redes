@@ -15,6 +15,9 @@ ClientList *createNewNode(int server_fd, char *ip);
 //Disconnects a specific node
 void disconnectNode(ClientList *node);
 
+//Put the newchar at the end of a string
+void str_trim(char *str, char newchar);
+
 //Closes the server
 void *quitHandler(void *rootNode);
 
@@ -26,6 +29,14 @@ void *sendMessage(void *info);
 
 //Send the message to all clients
 void sendAllClients(ClientList *root, ClientList *node, char message[]);
+
+void join(char *channel, ChannelList *root, ClientList *client);
+
+bool whoIs(ClientList *admin, char *username);
+
+void mute(ClientList *admin, char *username, bool mute);
+
+void kick(ClientList *admin, char *username);
 
 //Handles the client
 void *clientHandler(void *info);

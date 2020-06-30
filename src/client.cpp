@@ -9,7 +9,6 @@ using namespace std;
 //Global variables
 char nickname[MESSAGE_SIZE] = {};
 
-
 void errorMsg(const char *msg)
 {
     perror(msg);
@@ -21,7 +20,6 @@ void quit(int sock)
     close(sock);
     exit(0);
 }
-
 
 void ctrl_c_handler(int sig)
 {
@@ -127,17 +125,36 @@ int main(int argc, char const *argv[])
     int s_addrlen = sizeof(server_addr);
     int c_addrlen = sizeof(client_addr);
     int sock = 0;
-    char buffer[12] = {};
+    char buffer[MESSAGE_SIZE] = {};
+    char command[MESSAGE_SIZE] = {};
+
 
     signal(SIGINT, ctrl_c_handler);
+    bzero(nickname, NICKNAME_SIZE);
 
     //Get nickname
     do
     {
-        cout << "Please enter your nickname (1~9 characters): ";
-        if (fgets(nickname, MESSAGE_SIZE - 1, stdin) != NULL)
-            str_trim(nickname, '\0');
+        cout << "Please enter your nickname (1~50 characters): /nickname username: ";
+        if (fgets(buffer, MESSAGE_SIZE - 1, stdin) != NULL)
+        {
+            if (buffer[0] == '/')
+            {
+                sscanf(buffer, "%s %s", command, nickname);
+                if(!strcmp(command, "/nickname")){
+                    str_trim(nickname, '\0');
+                }
+                else
+                {
+                    cout << "Invalid command.\n";
+                }
+                
+            }
+        }
     } while (strlen(nickname) < 1 || strlen(nickname) > NICKNAME_SIZE - 1);
+
+
+    bzero(buffer, MESSAGE_SIZE);
 
     //Create socket file descriptor
     if ((sock = socket(AF_INET, SOCK_STREAM, PROTOCOL)) < 0)

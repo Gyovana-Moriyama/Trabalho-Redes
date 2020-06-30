@@ -11,7 +11,7 @@
 #define PROTOCOL            0
 
 #define MESSAGE_SIZE        2049
-#define NICKNAME_SIZE       10
+#define NICKNAME_SIZE       51
 #define CHANNEL_NAME_SIZE   201
 
 //Shows error message and exit
