@@ -172,26 +172,26 @@ int main(int argc, char const *argv[])
     char ip[10] = {};
 
     //Gets server address, it can be the default or any other valid ip
-    do
-    {
-        cout << "Please enter server address (default: " << DEFAULT_IP << ").\nFor default enter /default: ";
-        if (fgets(ip, MESSAGE_SIZE - 1, stdin) != NULL)
-            str_trim(ip, '\0');
+    // do
+    // {
+    //     cout << "Please enter server address (default: " << DEFAULT_IP << ").\nFor default enter /default: ";
+    //     if (fgets(ip, MESSAGE_SIZE - 1, stdin) != NULL)
+    //         str_trim(ip, '\0');
 
-    } while (strlen(ip) < 8 || strlen(ip) > 9);
+    // } while (strlen(ip) < 8 || strlen(ip) > 9);
 
     int addr = 0;
 
-    if (!strcmp(ip, "/default"))
-    {
+    // if (!strcmp(ip, "/default"))
+    // {
         // Convert IPv4 and IPv6 addresses from text to binary form
         addr = inet_pton(AF_INET, DEFAULT_IP, &server_addr.sin_addr);
-    }
-    else
-    {
+    // }
+    // else
+    // {
         // Convert IPv4 and IPv6 addresses from text to binary form
-        addr = inet_pton(AF_INET, ip, &server_addr.sin_addr);
-    }
+        // addr = inet_pton(AF_INET, ip, &server_addr.sin_addr);
+    // }
 
     if (addr <= 0)
         errorMsg("\nInvalid address/ Address not supported\n");

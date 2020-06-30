@@ -12,15 +12,17 @@ struct s_clientList
     int socket;
     bool received;
     int attempts;
-    struct s_clientList *prev;
-    struct s_clientList *next;
+    ClientList *prev;
+    ClientList *next;
     char ip[16];
     char name[NICKNAME_SIZE];
     bool isAdmin;
     bool muted;
-    char channels[MAX_CHANNELS][CHANNEL_NAME_SIZE];
+    // char **channels;
+    char channels[MAX_CHANNELS][CHANNEL_NAME_SIZE]; 
     ChannelList *activeChannel;
-    struct s_clientList *mainNode;
+    ClientList *activeInstance;
+    ClientList *mainNode;
 };
 
 typedef struct s_sendInfo
@@ -38,8 +40,8 @@ typedef struct s_threadInfo
 
 struct s_channelList
 {
-    struct s_channelList *prev;
-    struct s_channelList *next;
+    ChannelList *prev;
+    ChannelList *next;
     char name[CHANNEL_NAME_SIZE];
     ClientList *clients;
 };
@@ -58,8 +60,12 @@ ClientList *createClient(int sock_fd, char *ip)
     newNode->muted = false;
     newNode->activeChannel = NULL;
     newNode->mainNode = NULL;
+
+
+    // newNode->channels = (char **)malloc(sizeof(char *) * MAX_CHANNELS);
     for (int i = 0; i < MAX_CHANNELS; i++)
     {
+        // newNode->channels[i] = (char *)malloc(sizeof(char) * CHANNEL_NAME_SIZE);
         newNode->channels[i][0] = '\0';
     }
 
@@ -252,12 +258,15 @@ void sendAllClients(ClientList *root, ClientList *node, char message[])
 
 void join(char *channel, ChannelList *root, ClientList *client)
 {
-    ChannelList *tmp = root->next;
+    // TODO: channel admin cant send messages
+
+    ChannelList *tmp = root;
     bool createNewChannel = true;
 
     while (tmp->next != NULL)
     {
-        if (!strcmp(channel, tmp->name))
+        cout << tmp->next->name;
+        if (!strcmp(channel, tmp->next->name))
         {
             createNewChannel = false;
             break;
@@ -266,17 +275,27 @@ void join(char *channel, ChannelList *root, ClientList *client)
         tmp = tmp->next;
     }
 
+
     if (createNewChannel)
     {
-        ChannelList *newChannel = createChannelNode(channel, client);
+        // Creates secondary node of client
+        ClientList *newClient = createClient(client->socket, client->ip);
+
+        ChannelList *newChannel = createChannelNode(channel, newClient);
+        newClient->mainNode = client->mainNode;
         tmp->next = newChannel;
         newChannel->prev = tmp;
+
         client->mainNode->activeChannel = newChannel;
+        client->mainNode->activeInstance = newClient;
+
         for (int i = 0; i < MAX_CHANNELS; i++)
         {
+            cout << i << endl;
             if (client->channels[i][0] == '\0')
             {
                 strcpy(client->mainNode->channels[i], channel);
+                break;
             }
         }
     }
@@ -285,10 +304,25 @@ void join(char *channel, ChannelList *root, ClientList *client)
         bool isInChannel = false;
         for (int i = 0; i < MAX_CHANNELS; i++)
         {
-            if (!strcmp(client->mainNode->channels[i], tmp->name))
+            if (!strcmp(client->channels[i], tmp->name))
             {
                 isInChannel = true;
                 client->mainNode->activeChannel = tmp;
+
+                // Updates active instance
+                ClientList *instance = tmp->clients;
+                while (instance != NULL)
+                {
+                    if (!strcmp(instance->name, client->name))
+                    {
+                        client->mainNode->activeInstance = instance;
+                        break;
+                    }
+
+                    instance = instance->next;
+                }
+
+                break;
             }
         }
 
@@ -298,15 +332,18 @@ void join(char *channel, ChannelList *root, ClientList *client)
             newClient->next = tmp->clients->next;
             newClient->prev = tmp->clients;
             tmp->clients->next = newClient;
+            newClient->mainNode = client->mainNode;
 
             client->mainNode->activeChannel = tmp;
+            client->mainNode->activeInstance = newClient;
 
             for (int i = 0; i < MAX_CHANNELS; i++)
             {
                 if (client->mainNode->channels[i][0] == '\0')
+                {
                     strcpy(client->mainNode->channels[i], channel);
-
-                strcpy(newClient->channels[i], client->mainNode->channels[i]);
+                    break;
+                }
             }
         }
     }
@@ -315,9 +352,9 @@ void join(char *channel, ChannelList *root, ClientList *client)
 bool whoIs(ClientList *admin, char *username)
 {
     char buffer[MESSAGE_SIZE] = {};
-    ClientList *tmp = admin->activeChannel->clients;
+    ClientList *tmp = admin->activeChannel->clients->next;
 
-    while (tmp->next != NULL)
+    while (tmp != NULL)
     {
         if (!strcmp(tmp->name, username))
         {
@@ -335,13 +372,14 @@ bool whoIs(ClientList *admin, char *username)
 
 void mute(ClientList *admin, char *username, bool mute)
 {
-    ClientList *tmp = admin->activeChannel->clients;
+    ClientList *tmp = admin->activeChannel->clients->next;
 
-    while (tmp->next != NULL)
+    while (tmp != NULL)
     {
         if (!strcmp(tmp->name, username))
         {
             tmp->muted = mute;
+            return;
             //tell user that is muted
         }
         tmp = tmp->next;
@@ -352,7 +390,7 @@ void kick(ClientList *admin, char *username)
 {
     ClientList *tmp = admin->activeChannel->clients->next;
 
-    while (tmp->next != NULL)
+    while (tmp != NULL)
     {
         if (!strcmp(tmp->name, username))
         {
@@ -361,6 +399,7 @@ void kick(ClientList *admin, char *username)
 
             for (int i = 0; i < MAX_CHANNELS; i++)
             {
+                //TODO
             }
 
         }
@@ -494,10 +533,10 @@ void *clientHandler(void *info)
                 }
             }
         }
-        else if (!tInfo->clientNode->muted)
+        else if (!tInfo->clientNode->activeInstance->muted)
         {
             sprintf(sendBuffer, "%s: %s", tInfo->clientNode->name, recvBuffer);
-            sendAllClients(tInfo->clientRoot, tInfo->clientNode, sendBuffer);
+            sendAllClients(tInfo->clientNode->activeChannel->clients, tInfo->clientNode->activeInstance, sendBuffer);
         }
     }
 
@@ -574,6 +613,9 @@ int main(int argc, char const *argv[])
 
         //Create new client node and append to linked list
         ClientList *node = createClient(client_fd, inet_ntoa(client_addr.sin_addr));
+        node->mainNode = node;
+        node->activeInstance = node;
+        node->muted = true;
 
         //Naming
         recv(node->socket, nickname, NICKNAME_SIZE, 0);
