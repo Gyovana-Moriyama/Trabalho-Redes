@@ -80,7 +80,6 @@ ChannelList *createChannelNode(char *name, ClientList *admin)
     newNode->next = NULL;
     strcpy(newNode->name, name);
     newNode->clients = admin;
-    newNode->clients->isAdmin = true;
 
     return newNode;
 }
@@ -283,6 +282,7 @@ void join(char *channel, ChannelList *root, ClientList *client)
         ClientList *newClient = createClient(client->socket, client->ip);
         newClient->mainNode = client->mainNode;
         strcpy(newClient->name, client->mainNode->name);
+        newClient->isAdmin = true;
 
         // Creates new channel
         ChannelList *newChannel = createChannelNode(channel, newClient);
@@ -369,7 +369,7 @@ void join(char *channel, ChannelList *root, ClientList *client)
 bool whoIs(ClientList *admin, char *username)
 {
     char buffer[MESSAGE_SIZE] = {};
-    ClientList *tmp = admin->activeChannel->clients->next;
+    ClientList *tmp = admin->mainNode->activeChannel->clients->next;
 
     while (tmp != NULL)
     {
@@ -389,7 +389,7 @@ bool whoIs(ClientList *admin, char *username)
 
 void mute(ClientList *admin, char *username, bool mute)
 {
-    ClientList *tmp = admin->activeChannel->clients->next;
+    ClientList *tmp = admin->mainNode->activeChannel->clients->next;
 
     while (tmp != NULL)
     {
@@ -403,22 +403,35 @@ void mute(ClientList *admin, char *username, bool mute)
     }
 }
 
-void kick(ClientList *admin, char *username)
+void kick(ChannelList *root, ClientList *admin, char *username)
 {
-    ClientList *tmp = admin->activeChannel->clients->next;
+    ClientList *tmp = admin->mainNode->activeChannel->clients->next->next;
 
     while (tmp != NULL)
     {
         if (!strcmp(tmp->name, username))
         {
+            // Removes node from channel's client list
             tmp->prev->next = tmp->next;
-            tmp->next->prev = tmp->prev;
+            if (tmp->next != NULL)
+                tmp->next->prev = tmp->prev;
 
+            // Removes channel from channel list
             for (int i = 0; i < MAX_CHANNELS; i++)
             {
-                //TODO
+                if (!strcmp(tmp->mainNode->channels[i], admin->mainNode->activeChannel->name))
+                {
+                    tmp->mainNode->channels[i][0] = '\0';
+                    break;
+                }
             }
 
+            // Resets active channel and instance
+            tmp->mainNode->activeChannel = root;
+            tmp->mainNode->activeInstance = tmp->mainNode;
+
+            free(tmp);
+            return;
         }
         tmp = tmp->next;
     }
@@ -504,9 +517,9 @@ void *clientHandler(void *info)
             }
             else if (!strcmp(command, "/whois"))
             {
-                if (tInfo->clientNode->isAdmin)
+                if (tInfo->clientNode->activeInstance->isAdmin)
                 {
-                    if (!whoIs(tInfo->clientNode, argument))
+                    if (!whoIs(tInfo->clientNode->activeInstance, argument))
                     {
                         leave_flag = 1;
                     }
@@ -518,9 +531,9 @@ void *clientHandler(void *info)
             }
             else if (!strcmp(command, "/kick"))
             {
-                if (tInfo->clientNode->isAdmin)
+                if (tInfo->clientNode->activeInstance->isAdmin)
                 {
-                    // coisas()
+                    kick(tInfo->channelRoot, tInfo->clientNode->activeInstance, argument);
                 }
                 else
                 {
@@ -529,9 +542,9 @@ void *clientHandler(void *info)
             }
             else if (!strcmp(command, "/mute"))
             {
-                if (tInfo->clientNode->isAdmin)
+                if (tInfo->clientNode->activeInstance->isAdmin)
                 {
-                    mute(tInfo->clientNode, argument, true);
+                    mute(tInfo->clientNode->activeInstance, argument, true);
                 }
                 else
                 {
@@ -540,9 +553,9 @@ void *clientHandler(void *info)
             }
             else if (!strcmp(command, "/unmute"))
             {
-                if (tInfo->clientNode->isAdmin)
+                if (tInfo->clientNode->activeInstance->isAdmin)
                 {
-                    mute(tInfo->clientNode, argument, false);
+                    mute(tInfo->clientNode->activeInstance, argument, false);
                 }
                 else
                 {
