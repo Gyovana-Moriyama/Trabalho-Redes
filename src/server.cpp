@@ -19,7 +19,7 @@ struct s_clientList
     bool isAdmin;
     bool muted;
     // char **channels;
-    char channels[MAX_CHANNELS][CHANNEL_NAME_SIZE]; 
+    char channels[MAX_CHANNELS][CHANNEL_NAME_SIZE];
     ChannelList *activeChannel;
     ClientList *activeInstance;
     ClientList *mainNode;
@@ -61,7 +61,6 @@ ClientList *createClient(int sock_fd, char *ip)
     newNode->activeChannel = NULL;
     newNode->mainNode = NULL;
 
-
     // newNode->channels = (char **)malloc(sizeof(char *) * MAX_CHANNELS);
     for (int i = 0; i < MAX_CHANNELS; i++)
     {
@@ -72,14 +71,14 @@ ClientList *createClient(int sock_fd, char *ip)
     return newNode;
 }
 
-ChannelList *createChannelNode(char *name, ClientList *admin)
+ChannelList *createChannelNode(char *name, ClientList *root)
 {
     ChannelList *newNode = (ChannelList *)malloc(sizeof(ChannelList));
 
     newNode->prev = NULL;
     newNode->next = NULL;
     strcpy(newNode->name, name);
-    newNode->clients = admin;
+    newNode->clients = root;
 
     return newNode;
 }
@@ -208,7 +207,6 @@ void send(ClientList *node, char message[])
     pthread_detach(sendThread);
 }
 
-
 void *sendMessage(void *info)
 {
     SendInfo *sendInfo = (SendInfo *)info;
@@ -282,7 +280,6 @@ void join(char *channel, ChannelList *root, ClientList *client)
         tmp = tmp->next;
     }
 
-
     if (createNewChannel)
     {
         // Creates secondary node of client
@@ -291,21 +288,21 @@ void join(char *channel, ChannelList *root, ClientList *client)
         strcpy(newClient->name, client->mainNode->name);
         newClient->isAdmin = true;
 
-        // Creates new channel
-        ChannelList *newChannel = createChannelNode(channel, newClient);
+        // Creates new channel and starts the list of clients, using an empty root node and the admin
+        ClientList *rootNode = createClient(0, "0");
+        ChannelList *newChannel = createChannelNode(channel, rootNode);
         tmp->next = newChannel;
         newChannel->prev = tmp;
+
+        //Insert admin on the list
+        newChannel->clients->next = newClient;
+        newClient->prev = newChannel->clients;
 
         // Sets the new channel as the active one
         client->mainNode->activeChannel = newChannel;
         client->mainNode->activeInstance = newClient;
 
-        // Starts the list of clients, using an empty root node and the admin
-        ClientList *rootNode = createClient(0,"0");
-        newChannel->clients = rootNode;
-        rootNode->next = newClient;
-        newClient->prev = rootNode;
-//TODO verificar se atingiiu o numero maimo de canais
+        //TODO verificar se atingiiu o numero maimo de canais
         // Searches for a empty space on the list of channels to put the new one
         for (int i = 0; i < MAX_CHANNELS; i++)
         {
@@ -362,6 +359,8 @@ void join(char *channel, ChannelList *root, ClientList *client)
             // Adds the new client to the list (after the admin, who is client->next)
             newClient->next = tmp->clients->next->next;
             newClient->prev = tmp->clients->next;
+            if(tmp->clients->next->next != NULL)
+                tmp->clients->next->next->prev = newClient;
             tmp->clients->next->next = newClient;
 
             // Sets the channel as active one
@@ -397,7 +396,8 @@ bool whoIs(ClientList *admin, char *username)
     {
         if (!strcmp(tmp->name, username))
         {
-            sprintf(buffer, "%s: %s\n", username, tmp->ip);
+            //send to admin the IP osf the user
+            sprintf(buffer, "User(%s): %s\n", username, tmp->ip);
             int snd = send(admin->socket, buffer, MESSAGE_SIZE, 0);
             if (snd < 0)
                 return false;
@@ -412,14 +412,25 @@ bool whoIs(ClientList *admin, char *username)
 void mute(ClientList *admin, char *username, bool mute)
 {
     ClientList *tmp = admin->mainNode->activeChannel->clients->next;
+    char message[MESSAGE_SIZE] = {};
 
     while (tmp != NULL)
     {
         if (!strcmp(tmp->name, username))
         {
             tmp->muted = mute;
+            if (mute)
+            {
+                sprintf(message, "You were muted by %s.\n", admin->name);
+                send(tmp->mainNode, message);
+            }
+            else
+            {
+                sprintf(message, "You were unmuted by %s.\n", admin->name);
+                send(tmp->mainNode, message);
+            }
+
             return;
-            //tell user that is muted
         }
         tmp = tmp->next;
     }
@@ -448,6 +459,13 @@ void kick(ChannelList *root, ClientList *admin, char *username)
                 }
             }
 
+            char message[MESSAGE_SIZE];
+            sprintf(message, "/channel #none You were kicked out of the channel %s by %s. Switched to", admin->mainNode->activeChannel->name, admin->name);
+            send(tmp->mainNode, message);
+
+            sprintf(message, "%s - %s were kicked out of the channel.\n", admin->mainNode->activeChannel->name, tmp->name);
+            sendAllClients(admin->mainNode->activeChannel->clients, tmp->mainNode, message);
+
             // Resets active channel and instance
             tmp->mainNode->activeChannel = root;
             tmp->mainNode->activeInstance = tmp->mainNode;
@@ -465,6 +483,7 @@ void *clientHandler(void *info)
     char recvBuffer[MESSAGE_SIZE] = {};
     char sendBuffer[MESSAGE_SIZE + NICKNAME_SIZE + CHANNEL_NAME_SIZE + 5] = {};
     ThreadInfo *tInfo = (ThreadInfo *)info;
+    char message[MESSAGE_SIZE] = {};
     char command[MESSAGE_SIZE] = {};
     char argument[MESSAGE_SIZE] = {};
 
@@ -482,7 +501,7 @@ void *clientHandler(void *info)
             break;
 
         bzero(recvBuffer, MESSAGE_SIZE);
-        bzero(sendBuffer, MESSAGE_SIZE);
+        bzero(sendBuffer, MESSAGE_SIZE + NICKNAME_SIZE + CHANNEL_NAME_SIZE + 5);
         bzero(command, MESSAGE_SIZE);
         bzero(argument, MESSAGE_SIZE);
 
@@ -531,7 +550,9 @@ void *clientHandler(void *info)
                 }
                 else
                 {
-                    //nome inválido
+
+                    sprintf(message, "Incorrect name form. Channel name needs to start with '#' or '&'.\n.");
+                    send(tInfo->clientNode, message);
                 }
             }
             else if (!strcmp(command, "/whois"))
@@ -545,7 +566,8 @@ void *clientHandler(void *info)
                 }
                 else
                 {
-                    //not admin
+                    sprintf(message, "Invalid command. You are not the admin of this channel.\n");
+                    send(tInfo->clientNode->activeInstance, message);
                 }
             }
             else if (!strcmp(command, "/kick"))
@@ -556,7 +578,8 @@ void *clientHandler(void *info)
                 }
                 else
                 {
-                    //not admin
+                    sprintf(message, "Invalid command. You are not the admin of this channel.\n");
+                    send(tInfo->clientNode->activeInstance, message);
                 }
             }
             else if (!strcmp(command, "/mute"))
@@ -567,7 +590,8 @@ void *clientHandler(void *info)
                 }
                 else
                 {
-                    //not admin
+                    sprintf(message, "Invalid command. You are not the admin of this channel.\n");
+                    send(tInfo->clientNode->activeInstance, message);
                 }
             }
             else if (!strcmp(command, "/unmute"))
@@ -578,7 +602,8 @@ void *clientHandler(void *info)
                 }
                 else
                 {
-                    //not admin
+                    sprintf(message, "Invalid command. You are not the admin of this channel.\n");
+                    send(tInfo->clientNode->activeInstance, message);
                 }
             }
         }
@@ -694,6 +719,7 @@ int main(int argc, char const *argv[])
 
             //Remove Node
             disconnectNode(node);
+            pthread_detach(id);
         }
     }
     return 0;

@@ -14,10 +14,20 @@
 #define NICKNAME_SIZE       51
 #define CHANNEL_NAME_SIZE   201
 
-//Shows error message and exit
+/**
+ * @brief  Shows error message and exit
+ * @note   
+ * @param  *msg: message tha will be printed
+ * @retval None
+ */
 void errorMsg(const char *msg);
 
-//Handle with Ctrl C
+/**
+ * @brief  Handle with Ctrl C
+ * @note   
+ * @param  sig: signal
+ * @retval None
+ */
 void ctrl_c_handler(int sig);
 
 
