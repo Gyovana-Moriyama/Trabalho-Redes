@@ -13,7 +13,15 @@
 ## Comandos 
 ### Cliente:
 - /connect conecta o cliente com o servidor
+- /nickname NomeUsuario faz com que o usuário seja reconhecido pelo nome especificado
 - /ping o servidor responde com pong
+- /join NomeCanal entra no canal com o nome especificado
+- /help mostra os comandos que o usuário pode utilizar
 - /quit desconecta o cliente do servidor
+#### Administrador:
+- /whois NomeUsuario manda para o administrador o IP do usuário especificado
+- /mute NomeUsuario muta o usuário especificado
+- /unmute NomeUsuario desmuta o usuário especificado
+- /kick NomeUsuario retira o usuário especificado do canal
 ### Servidor:
 - /quit desconecta todos os clientes que ainda estiverem conectados e fecha o servidor

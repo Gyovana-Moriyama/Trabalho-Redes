@@ -32,9 +32,10 @@ ChannelList *createChannelNode(char *name, ClientList *root);
  * @brief  Disconnects a specific client
  * @note   
  * @param  *node: pointer to the client to be disconnected
+ * @param  *rootChannel: pointer to the root of the channels list
  * @retval None
  */
-void disconnectNode(ClientList *node);
+void disconnectNode(ClientList *node, ChannelList *rootChannel);
 
 /**
  * @brief  Deletes a specific channel
@@ -59,16 +60,17 @@ void str_trim(char *str, char newchar);
  * @param  *rootNode: pointer to the root of the list
  * @retval None
  */
-void *quitHandler(void *rootNode);
+void *quitHandler(void *info);
 
 /**
  * @brief  Sends servers messages to a client
  * @note   
+ * @param  *channelRoot: pointer to the root of the channels list 
  * @param  *node: pointer to the client that will receive the message
  * @param  message[]: the actual message
  * @retval None
  */
-void send(ClientList *node, char message[]);
+void send(ChannelList *channelRoot, ClientList *node, char message[]);
 
 /**
  * @brief  Tries to send the message 5 times. If unsuccessful, disconnects client
@@ -81,12 +83,13 @@ void *sendMessage(void *info);
 /**
  * @brief  Send the message to all clients
  * @note   
+ * @param  *channelRoot: pointer to the root of the channels list 
  * @param  *root: pointer to the root of a clients list
  * @param  *node: pointer to the client hat is sending the message
  * @param  message[]: the actual message
  * @retval None
  */
-void sendAllClients(ClientList *root, ClientList *node, char message[]);
+void sendAllClients(ChannelList *channelRoot, ClientList *root, ClientList *node, char message[]);
 
 /**
  * @brief  Creates new channel, switches client channel and client can join new channel
@@ -110,12 +113,13 @@ bool whoIs(ClientList *admin, char *username);
 /**
  * @brief  Allows admin to mute/unmute a speciic user of the channel
  * @note   
+ * @param  *root: pointer to the root of the channels list 
  * @param  *admin: pointer to the admin of the channel
  * @param  *username: name of he user that the admin is going to mute/unmute
  * @param  mute: bool: if true the user will be muted and if false unmuted
  * @retval None
  */
-void mute(ClientList *admin, char *username, bool mute);
+void mute(ChannelList *root, ClientList *admin, char *username, bool mute);
 
 /**
  * @brief  Allows admin to kick a speciic user of the channel
