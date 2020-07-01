@@ -20,6 +20,7 @@ struct s_clientList
     bool muted;
     // char **channels;
     char channels[MAX_CHANNELS][CHANNEL_NAME_SIZE];
+    int numberOfChannels;
     ChannelList *activeChannel;
     ClientList *activeInstance;
     ClientList *mainNode;
@@ -60,6 +61,7 @@ ClientList *createClient(int sock_fd, char *ip)
     newNode->muted = false;
     newNode->activeChannel = NULL;
     newNode->mainNode = NULL;
+    newNode->numberOfChannels = 0;
 
     // newNode->channels = (char **)malloc(sizeof(char *) * MAX_CHANNELS);
     for (int i = 0; i < MAX_CHANNELS; i++)
@@ -280,8 +282,16 @@ void join(char *channel, ChannelList *root, ClientList *client)
         tmp = tmp->next;
     }
 
+    char message[MESSAGE_SIZE];
     if (createNewChannel)
     {
+        if (client->mainNode->numberOfChannels == MAX_CHANNELS)
+        {
+            sprintf(message, "Could not create channel. Limit of channels reached.\n", channel);
+            send(client->mainNode, message);
+            return;
+        }
+
         // Creates secondary node of client
         ClientList *newClient = createClient(client->socket, client->ip);
         newClient->mainNode = client->mainNode;
@@ -302,7 +312,6 @@ void join(char *channel, ChannelList *root, ClientList *client)
         client->mainNode->activeChannel = newChannel;
         client->mainNode->activeInstance = newClient;
 
-        //TODO verificar se atingiiu o numero maimo de canais
         // Searches for a empty space on the list of channels to put the new one
         for (int i = 0; i < MAX_CHANNELS; i++)
         {
@@ -312,8 +321,8 @@ void join(char *channel, ChannelList *root, ClientList *client)
                 break;
             }
         }
+        client->mainNode->numberOfChannels++;
 
-        char message[MESSAGE_SIZE];
         sprintf(message, "/channel %s Created and switched to channel", channel);
         send(client->mainNode, message);
     }
@@ -341,7 +350,6 @@ void join(char *channel, ChannelList *root, ClientList *client)
                     instance = instance->next;
                 }
 
-                char message[MESSAGE_SIZE];
                 sprintf(message, "/channel %s Switched to channel", channel);
                 send(client->mainNode, message);
 
@@ -351,6 +359,13 @@ void join(char *channel, ChannelList *root, ClientList *client)
 
         if (!isInChannel)
         {
+            if (client->mainNode->numberOfChannels == MAX_CHANNELS)
+            {
+                sprintf(message, "Could not join channel. Limit of channels reached.\n", channel);
+                send(client->mainNode, message);
+                return;
+            }
+
             // Creates an new client instance
             ClientList *newClient = createClient(client->socket, client->ip);
             newClient->mainNode = client->mainNode;
@@ -377,7 +392,6 @@ void join(char *channel, ChannelList *root, ClientList *client)
                 }
             }
 
-            char message[MESSAGE_SIZE];
             sprintf(message, "/channel %s You joined the channel", channel);
             send(newClient->mainNode, message);
 
@@ -397,14 +411,21 @@ bool whoIs(ClientList *admin, char *username)
         if (!strcmp(tmp->name, username))
         {
             //send to admin the IP osf the user
-            sprintf(buffer, "User(%s): %s\n", username, tmp->ip);
+            sprintf(buffer, "%s - User(%s): %s\n", admin->mainNode->activeChannel, username, tmp->ip);
             int snd = send(admin->socket, buffer, MESSAGE_SIZE, 0);
             if (snd < 0)
                 return false;
+            return true;
         }
 
         tmp = tmp->next;
     }
+
+
+    sprintf(buffer, "User '%s' is not on this channel\n", username);
+    int snd = send(admin->socket, buffer, MESSAGE_SIZE, 0);
+    if (snd < 0)
+        return false;
 
     return true;
 }
@@ -421,24 +442,34 @@ void mute(ClientList *admin, char *username, bool mute)
             tmp->muted = mute;
             if (mute)
             {
-                sprintf(message, "You were muted by %s.\n", admin->name);
+                sprintf(message, "%s - You were muted by %s.\n", admin->mainNode->activeChannel->name, admin->name);
                 send(tmp->mainNode, message);
+
+                sprintf(message, "%s - %s was muted.\n", admin->mainNode->activeChannel->name, tmp->name);
+                send(admin->mainNode, message);
             }
             else
             {
-                sprintf(message, "You were unmuted by %s.\n", admin->name);
+                sprintf(message, "%s - You were unmuted by %s.\n", admin->mainNode->activeChannel->name, admin->name);
                 send(tmp->mainNode, message);
+
+                sprintf(message, "%s - %s was unmuted.\n", admin->mainNode->activeChannel->name, tmp->name);
+                send(admin->mainNode, message);
             }
 
             return;
         }
         tmp = tmp->next;
     }
+
+    sprintf(message, "User '%s' is not on this channel\n", username);
+    send(admin->socket, message, MESSAGE_SIZE, 0);
 }
 
 void kick(ChannelList *root, ClientList *admin, char *username)
 {
     ClientList *tmp = admin->mainNode->activeChannel->clients->next->next;
+    char message[MESSAGE_SIZE];
 
     while (tmp != NULL)
     {
@@ -459,7 +490,6 @@ void kick(ChannelList *root, ClientList *admin, char *username)
                 }
             }
 
-            char message[MESSAGE_SIZE];
             sprintf(message, "/channel #none You were kicked out of the channel %s by %s. Switched to", admin->mainNode->activeChannel->name, admin->name);
             send(tmp->mainNode, message);
 
@@ -470,11 +500,16 @@ void kick(ChannelList *root, ClientList *admin, char *username)
             tmp->mainNode->activeChannel = root;
             tmp->mainNode->activeInstance = tmp->mainNode;
 
+            tmp->mainNode->numberOfChannels--;
+
             free(tmp);
             return;
         }
         tmp = tmp->next;
     }
+
+    sprintf(message, "User '%s' is not on this channel\n", username);
+    send(admin->socket, message, MESSAGE_SIZE, 0);
 }
 
 void *clientHandler(void *info)
@@ -491,7 +526,7 @@ void *clientHandler(void *info)
     cout << tInfo->clientNode->name << " (" << tInfo->clientNode->ip << ")"
          << " (" << tInfo->clientNode->socket << ")"
          << " joined the server.\n";
-    sprintf(sendBuffer, "Server: %s joined the server.\n", tInfo->clientNode->name);
+    sprintf(sendBuffer, "Server: %s joined the server.     \n", tInfo->clientNode->name);
     sendAllClients(tInfo->clientRoot, tInfo->clientNode, sendBuffer);
 
     //Conversation
@@ -532,7 +567,7 @@ void *clientHandler(void *info)
                 cout << tInfo->clientNode->name << " (" << tInfo->clientNode->ip << ")"
                      << " (" << tInfo->clientNode->socket << ")"
                      << " left the server.\n";
-                sprintf(sendBuffer, "Server: %s left the server.\n", tInfo->clientNode->name);
+                sprintf(sendBuffer, "Server: %s left the server     .\n", tInfo->clientNode->name);
                 sendAllClients(tInfo->clientRoot, tInfo->clientNode, sendBuffer);
                 leave_flag = 1;
             }
@@ -606,6 +641,18 @@ void *clientHandler(void *info)
                     send(tInfo->clientNode->activeInstance, message);
                 }
             }
+            else if (!strcmp(command, "/help"))
+            {
+                sprintf(message, 
+                "    User commands:\n/quit = quit program\n/ping = check connection\n\n    Admin commands:\n/whois username = show user's ip\n/mute username = diable user's messages on the channel\n/unmute username = enables user's messages on the channel\n/kick username = kicks user from channel\n");
+                send(tInfo->clientNode->activeInstance, message);
+            }
+            else
+            {
+                sprintf(message, "Unknown command. Use /help to see the list of commands.\n");
+                send(tInfo->clientNode->activeInstance, message);
+            }
+            
         }
         else if (!tInfo->clientNode->activeInstance->muted)
         {
