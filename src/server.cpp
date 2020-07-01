@@ -193,14 +193,21 @@ void *quitHandler(void *rootNode)
     }
 }
 
-bool pong(ClientList *node, char message[])
+void send(ClientList *node, char message[])
 {
-    int snd = send(node->socket, message, MESSAGE_SIZE, 0);
-    if (snd < 0)
-        return false;
+    pthread_t sendThread;
+    SendInfo *sendInfo = (SendInfo *)malloc(sizeof(SendInfo));
+    sendInfo->node = node;
+    sendInfo->message = (char *)malloc(sizeof(char) * (MESSAGE_SIZE + NICKNAME_SIZE + CHANNEL_NAME_SIZE + 5));
+    strcpy(sendInfo->message, message);
 
-    return true;
+    if (pthread_create(&sendThread, NULL, sendMessage, (void *)sendInfo) != 0)
+    {
+        errorMsg("Create thread error");
+    }
+    pthread_detach(sendThread);
 }
+
 
 void *sendMessage(void *info)
 {
@@ -209,7 +216,7 @@ void *sendMessage(void *info)
 
     do
     {
-        snd = send(sendInfo->node->socket, sendInfo->message, MESSAGE_SIZE + NICKNAME_SIZE + 2, 0);
+        snd = send(sendInfo->node->socket, sendInfo->message, MESSAGE_SIZE + NICKNAME_SIZE + CHANNEL_NAME_SIZE + 5, 0);
         sendInfo->node->mainNode->attempts++;
         usleep(WAIT_ACK);
     } while (snd >= 0 && !sendInfo->node->mainNode->received && sendInfo->node->mainNode->attempts < 5);
@@ -244,7 +251,7 @@ void sendAllClients(ClientList *root, ClientList *node, char message[])
             pthread_t sendThread;
             SendInfo *sendInfo = (SendInfo *)malloc(sizeof(SendInfo));
             sendInfo->node = tmp;
-            sendInfo->message = (char *)malloc(sizeof(char) * (MESSAGE_SIZE + NICKNAME_SIZE + 2));
+            sendInfo->message = (char *)malloc(sizeof(char) * (MESSAGE_SIZE + NICKNAME_SIZE + CHANNEL_NAME_SIZE + 5));
             strcpy(sendInfo->message, message);
 
             if (pthread_create(&sendThread, NULL, sendMessage, (void *)sendInfo) != 0)
@@ -298,7 +305,7 @@ void join(char *channel, ChannelList *root, ClientList *client)
         newChannel->clients = rootNode;
         rootNode->next = newClient;
         newClient->prev = rootNode;
-
+//TODO verificar se atingiiu o numero maimo de canais
         // Searches for a empty space on the list of channels to put the new one
         for (int i = 0; i < MAX_CHANNELS; i++)
         {
@@ -308,6 +315,10 @@ void join(char *channel, ChannelList *root, ClientList *client)
                 break;
             }
         }
+
+        char message[MESSAGE_SIZE];
+        sprintf(message, "/channel %s Created and switched to channel", channel);
+        send(client->mainNode, message);
     }
     else
     {
@@ -332,6 +343,10 @@ void join(char *channel, ChannelList *root, ClientList *client)
 
                     instance = instance->next;
                 }
+
+                char message[MESSAGE_SIZE];
+                sprintf(message, "/channel %s Switched to channel", channel);
+                send(client->mainNode, message);
 
                 break;
             }
@@ -362,6 +377,13 @@ void join(char *channel, ChannelList *root, ClientList *client)
                     break;
                 }
             }
+
+            char message[MESSAGE_SIZE];
+            sprintf(message, "/channel %s You joined the channel", channel);
+            send(newClient->mainNode, message);
+
+            sprintf(message, "%s - %s joined the channel.\n", channel, newClient->name);
+            sendAllClients(tmp->clients, newClient->mainNode, message);
         }
     }
 }
@@ -441,7 +463,7 @@ void *clientHandler(void *info)
 {
     int leave_flag = 0;
     char recvBuffer[MESSAGE_SIZE] = {};
-    char sendBuffer[MESSAGE_SIZE + NICKNAME_SIZE + 2] = {};
+    char sendBuffer[MESSAGE_SIZE + NICKNAME_SIZE + CHANNEL_NAME_SIZE + 5] = {};
     ThreadInfo *tInfo = (ThreadInfo *)info;
     char command[MESSAGE_SIZE] = {};
     char argument[MESSAGE_SIZE] = {};
@@ -449,8 +471,8 @@ void *clientHandler(void *info)
     //Announces the client that joined the chatroom
     cout << tInfo->clientNode->name << " (" << tInfo->clientNode->ip << ")"
          << " (" << tInfo->clientNode->socket << ")"
-         << " joined the chatroom.\n";
-    sprintf(sendBuffer, "%s joined the chatroom.\n", tInfo->clientNode->name);
+         << " joined the server.\n";
+    sprintf(sendBuffer, "Server: %s joined the server.\n", tInfo->clientNode->name);
     sendAllClients(tInfo->clientRoot, tInfo->clientNode, sendBuffer);
 
     //Conversation
@@ -490,8 +512,8 @@ void *clientHandler(void *info)
             {
                 cout << tInfo->clientNode->name << " (" << tInfo->clientNode->ip << ")"
                      << " (" << tInfo->clientNode->socket << ")"
-                     << " left the chatroom.\n";
-                sprintf(sendBuffer, "%s left the chatroom.\n", tInfo->clientNode->name);
+                     << " left the server.\n";
+                sprintf(sendBuffer, "Server: %s left the server.\n", tInfo->clientNode->name);
                 sendAllClients(tInfo->clientRoot, tInfo->clientNode, sendBuffer);
                 leave_flag = 1;
             }
@@ -499,10 +521,7 @@ void *clientHandler(void *info)
             else if (!strcmp(command, "/ping"))
             {
                 sprintf(sendBuffer, "Server: pong\n");
-                if (!pong(tInfo->clientNode, sendBuffer))
-                {
-                    leave_flag = 1;
-                }
+                send(tInfo->clientNode, sendBuffer);
             }
             else if (!strcmp(command, "/join"))
             {
@@ -565,7 +584,7 @@ void *clientHandler(void *info)
         }
         else if (!tInfo->clientNode->activeInstance->muted)
         {
-            sprintf(sendBuffer, "%s: %s", tInfo->clientNode->name, recvBuffer);
+            sprintf(sendBuffer, "%s - %s: %s", tInfo->clientNode->activeChannel->name, tInfo->clientNode->name, recvBuffer);
             sendAllClients(tInfo->clientNode->activeChannel->clients, tInfo->clientNode->activeInstance, sendBuffer);
         }
     }

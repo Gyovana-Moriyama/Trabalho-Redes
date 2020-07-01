@@ -8,6 +8,7 @@ using namespace std;
 
 //Global variables
 char nickname[MESSAGE_SIZE] = {};
+char channel[CHANNEL_NAME_SIZE] = {};
 
 void errorMsg(const char *msg)
 {
@@ -28,7 +29,7 @@ void ctrl_c_handler(int sig)
 
 void str_print_nickname()
 {
-    printf("\r%s: ", nickname);
+    printf("\r%s - %s: ", channel,nickname);
     fflush(stdout);
 }
 
@@ -50,11 +51,11 @@ void str_trim(char *str, char newchar)
 
 void *receiveMsgHandler(void *sock)
 {
-    char buffer[MESSAGE_SIZE + NICKNAME_SIZE + 2] = {};
+    char buffer[MESSAGE_SIZE + NICKNAME_SIZE + CHANNEL_NAME_SIZE + 5] = {};
     int rcv;
     while (true)
     {
-        rcv = recv(*(int *)sock, buffer, MESSAGE_SIZE + NICKNAME_SIZE + 2, 0);
+        rcv = recv(*(int *)sock, buffer, MESSAGE_SIZE + NICKNAME_SIZE + CHANNEL_NAME_SIZE + 5, 0);
         if (rcv == 0)
         {
             cout << "\rLost connection to server...\n";
@@ -63,6 +64,24 @@ void *receiveMsgHandler(void *sock)
         }
         else if (rcv < 0)
             errorMsg("ERROR reading from socket");
+        else if (buffer[0] == '/')
+        {
+            char message[MESSAGE_SIZE];
+            sscanf(buffer, "/channel %s %[^\n]", channel, message);
+            cout << "\r" << message << " " << channel << ".\n";
+            fflush(stdout);
+
+            cout << "\r";
+            fflush(stdout);
+            str_print_nickname();
+
+            // Sends message to server, informing that the message was received
+            bzero(buffer, MESSAGE_SIZE + NICKNAME_SIZE + CHANNEL_NAME_SIZE + 5);
+            strcpy(buffer, "/ack");
+            int snd = send(*(int *)sock, buffer, strlen(buffer), MSG_DONTWAIT);
+            if (snd < 0)
+                errorMsg("ERROR writing to socket");
+        }
         else
         {
             cout << "\r" << buffer;
@@ -70,7 +89,7 @@ void *receiveMsgHandler(void *sock)
             str_print_nickname();
 
             // Sends message to server, informing that the message was received
-            bzero(buffer, MESSAGE_SIZE + NICKNAME_SIZE + 2);
+            bzero(buffer, MESSAGE_SIZE + NICKNAME_SIZE + CHANNEL_NAME_SIZE + 5);
             strcpy(buffer, "/ack");
             int snd = send(*(int *)sock, buffer, strlen(buffer), MSG_DONTWAIT);
             if (snd < 0)
@@ -132,10 +151,12 @@ int main(int argc, char const *argv[])
     signal(SIGINT, ctrl_c_handler);
     bzero(nickname, NICKNAME_SIZE);
 
+    strcpy(channel, "#none");
+
     //Get nickname
     do
     {
-        cout << "Please enter your nickname (1~50 characters): /nickname username: ";
+        cout << "Set your nickname (1~50 characters). Usage: /nickname username\n";
         if (fgets(buffer, MESSAGE_SIZE - 1, stdin) != NULL)
         {
             if (buffer[0] == '/')
