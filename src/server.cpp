@@ -211,20 +211,20 @@ void *sendMessage(void *info)
     do
     {
         snd = send(sendInfo->node->socket, sendInfo->message, MESSAGE_SIZE + NICKNAME_SIZE + 2, 0);
-        sendInfo->node->attempts++;
+        sendInfo->node->mainNode->attempts++;
         usleep(WAIT_ACK);
-    } while (snd >= 0 && !sendInfo->node->received && sendInfo->node->attempts < 5);
+    } while (snd >= 0 && !sendInfo->node->mainNode->received && sendInfo->node->mainNode->attempts < 5);
 
     // Disconnects client
-    if (sendInfo->node->attempts == 5 || snd < 0)
+    if (sendInfo->node->mainNode->attempts == 5 || snd < 0)
     {
         //Remove Node
         disconnectNode(sendInfo->node);
     }
-    else if (sendInfo->node->received)
+    else if (sendInfo->node->mainNode->received)
     {
-        sendInfo->node->received = false;
-        sendInfo->node->attempts = 0;
+        sendInfo->node->mainNode->received = false;
+        sendInfo->node->mainNode->attempts = 0;
         free(sendInfo->message);
         free(sendInfo);
     }
@@ -258,17 +258,18 @@ void sendAllClients(ClientList *root, ClientList *node, char message[])
 
 void join(char *channel, ChannelList *root, ClientList *client)
 {
-    // TODO: channel admin cant send messages
-
     ChannelList *tmp = root;
     bool createNewChannel = true;
 
+    // At the end of this loop, tmp will contain a pointer to the last node of the list, or to the existing channel
     while (tmp->next != NULL)
     {
-        cout << tmp->next->name;
+        // If it finds an existing channel with the same name, sets a flag indicating that there is
+        // no need to create a new channel, and then updates the pointer to that channel
         if (!strcmp(channel, tmp->next->name))
         {
             createNewChannel = false;
+            tmp = tmp->next;
             break;
         }
 
@@ -280,18 +281,27 @@ void join(char *channel, ChannelList *root, ClientList *client)
     {
         // Creates secondary node of client
         ClientList *newClient = createClient(client->socket, client->ip);
-
-        ChannelList *newChannel = createChannelNode(channel, newClient);
         newClient->mainNode = client->mainNode;
+        strcpy(newClient->name, client->mainNode->name);
+
+        // Creates new channel
+        ChannelList *newChannel = createChannelNode(channel, newClient);
         tmp->next = newChannel;
         newChannel->prev = tmp;
 
+        // Sets the new channel as the active one
         client->mainNode->activeChannel = newChannel;
         client->mainNode->activeInstance = newClient;
 
+        // Starts the list of clients, using an empty root node and the admin
+        ClientList *rootNode = createClient(0,"0");
+        newChannel->clients = rootNode;
+        rootNode->next = newClient;
+        newClient->prev = rootNode;
+
+        // Searches for a empty space on the list of channels to put the new one
         for (int i = 0; i < MAX_CHANNELS; i++)
         {
-            cout << i << endl;
             if (client->channels[i][0] == '\0')
             {
                 strcpy(client->mainNode->channels[i], channel);
@@ -301,6 +311,7 @@ void join(char *channel, ChannelList *root, ClientList *client)
     }
     else
     {
+        // Checks if the user is already on that channel. If so, just changes the
         bool isInChannel = false;
         for (int i = 0; i < MAX_CHANNELS; i++)
         {
@@ -328,15 +339,21 @@ void join(char *channel, ChannelList *root, ClientList *client)
 
         if (!isInChannel)
         {
+            // Creates an new client instance
             ClientList *newClient = createClient(client->socket, client->ip);
-            newClient->next = tmp->clients->next;
-            newClient->prev = tmp->clients;
-            tmp->clients->next = newClient;
             newClient->mainNode = client->mainNode;
+            strcpy(newClient->name, client->mainNode->name);
 
+            // Adds the new client to the list (after the admin, who is client->next)
+            newClient->next = tmp->clients->next->next;
+            newClient->prev = tmp->clients->next;
+            tmp->clients->next->next = newClient;
+
+            // Sets the channel as active one
             client->mainNode->activeChannel = tmp;
             client->mainNode->activeInstance = newClient;
 
+            // Searches for a empty space on the list of channels to put the new one
             for (int i = 0; i < MAX_CHANNELS; i++)
             {
                 if (client->mainNode->channels[i][0] == '\0')
