@@ -104,6 +104,8 @@ void printNode(ClientList *node)
 
 void disconnectNode(ClientList *node, ChannelList *rootChannel)
 {
+    bool canCloseChannel = false;
+
     cout << "Disconnecting " << node->name << endl;
     close(node->socket);
 
@@ -118,7 +120,7 @@ void disconnectNode(ClientList *node, ChannelList *rootChannel)
         node->next->prev = node->prev;
     }
 
-    if(node->numberOfChannels > 0)
+    if (node->numberOfChannels > 0)
     {
         ChannelList *tmp = rootChannel->next;
         for (int i = 0; i < MAX_CHANNELS; i++)
@@ -139,7 +141,9 @@ void disconnectNode(ClientList *node, ChannelList *rootChannel)
                                 clientTmp->prev->next = clientTmp->next;
                                 if (clientTmp->next != NULL)
                                     clientTmp->next->prev = clientTmp->prev;
-                                
+                                else if (clientTmp->prev->prev == NULL)
+                                    canCloseChannel = true;
+
                                 free(clientTmp);
                                 clientTmp = NULL;
                                 break;
@@ -148,6 +152,8 @@ void disconnectNode(ClientList *node, ChannelList *rootChannel)
                             clientTmp = clientTmp->next;
                         }
                         node->channels[i][0] = '\0';
+                        if (canCloseChannel)
+                            deleteChannel(tmp);
                         break;
                     }
 
@@ -161,7 +167,7 @@ void disconnectNode(ClientList *node, ChannelList *rootChannel)
     node = NULL;
 }
 
-void closeChannel(ChannelList *channel)
+void closeChannel(ChannelList *channel, ChannelList *root)
 {
     cout << "\nClosing channel: " << channel->name << endl;
 
@@ -173,6 +179,22 @@ void closeChannel(ChannelList *channel)
         cout << "\nRemoving " << root->name << " of channel\n";
         tmpClient = root;
         root = root->next;
+
+        // Removes channel from channel list
+        for (int i = 0; i < MAX_CHANNELS; i++)
+        {
+            if (!strcmp(tmpClient->mainNode->channels[i], channel->name))
+            {
+                tmpClient->mainNode->channels[i][0] = '\0';
+                break;
+            }
+        }
+
+        // Resets active channel and instance
+        tmpClient->mainNode->activeChannel = root;
+        tmpClient->mainNode->activeInstance = tmpClient->mainNode;
+
+        tmpClient->mainNode->numberOfChannels--;
         free(tmpClient);
         tmpClient = NULL;
     }
@@ -240,7 +262,7 @@ void *quitHandler(void *info)
         {
             while (channelRoot != NULL)
             {
-                closeChannel(channelRoot);
+                closeChannel(channelRoot,((ThreadInfo *)info)->channelRoot);
                 tmpChannel = channelRoot;
                 channelRoot = channelRoot->next;
                 free(tmpChannel);
@@ -336,7 +358,6 @@ void sendAllClients(ChannelList *channelRoot, ClientList *root, ClientList *node
             if (pthread_create(&sendThread, NULL, sendMessage, (void *)sendInfo) != 0)
                 errorMsg("Create thread error");
             pthread_detach(sendThread);
-
         }
         tmp = tmp->next;
     }
@@ -473,6 +494,8 @@ void join(char *channel, ChannelList *root, ClientList *client)
                 }
             }
 
+            client->mainNode->numberOfChannels++;
+
             sprintf(message, "/channel %s You joined the channel", channel);
             send(root, newClient->mainNode, message);
 
@@ -548,6 +571,7 @@ void mute(ChannelList *root, ClientList *admin, char *username, bool mute)
 
 void kick(ChannelList *root, ClientList *admin, char *username)
 {
+    bool canCloseChannel = false;
     ClientList *tmp = admin->mainNode->activeChannel->clients->next->next;
     char message[MESSAGE_SIZE];
 
@@ -559,6 +583,8 @@ void kick(ChannelList *root, ClientList *admin, char *username)
             tmp->prev->next = tmp->next;
             if (tmp->next != NULL)
                 tmp->next->prev = tmp->prev;
+            else if (tmp->prev->prev == NULL)
+                canCloseChannel = true;
 
             // Removes channel from channel list
             for (int i = 0; i < MAX_CHANNELS; i++)
@@ -583,6 +609,9 @@ void kick(ChannelList *root, ClientList *admin, char *username)
             tmp->mainNode->numberOfChannels--;
 
             free(tmp);
+            tmp = NULL;
+            if (canCloseChannel)
+                deleteChannel(admin->mainNode->activeChannel);
             return;
         }
         tmp = tmp->next;
@@ -590,6 +619,75 @@ void kick(ChannelList *root, ClientList *admin, char *username)
 
     sprintf(message, "User '%s' is not on this channel\n", username);
     send(admin->socket, message, MESSAGE_SIZE, 0);
+}
+
+void leave(ChannelList *root, ClientList *node, char *channelName)
+{
+    char message[MESSAGE_SIZE];
+    bool canCloseChannel = false;
+
+    ChannelList *channel = root->next;
+
+    while (channel != NULL)
+    {
+        if (!strcmp(channel->name, channelName))
+        {
+            break;
+        }
+
+        channel = channel->next;
+    }
+    if (channel != NULL)
+    {
+
+        ClientList *tmp = channel->clients->next;
+        while (tmp != NULL)
+        {
+            if (!strcmp(node->name, tmp->name))
+            {
+                // Removes node from channel's client list
+                tmp->prev->next = tmp->next;
+                if (tmp->next != NULL)
+                    tmp->next->prev = tmp->prev;
+                else if (tmp->prev->prev == NULL)
+                    canCloseChannel = true;
+
+                // Removes channel from channel list
+                for (int i = 0; i < MAX_CHANNELS; i++)
+                {
+                    if (!strcmp(tmp->mainNode->channels[i], channel->name))
+                    {
+                        tmp->mainNode->channels[i][0] = '\0';
+                        break;
+                    }
+                }
+
+                sprintf(message, "/channel #none You left the channel %s. Switched to", channel->name);
+                send(root, tmp->mainNode, message);
+
+                sprintf(message, "%s - %s left the channel.\n", channel->name, tmp->name);
+                sendAllClients(root, channel->clients, tmp->mainNode, message);
+
+                // Resets active channel and instance
+                tmp->mainNode->activeChannel = root;
+                tmp->mainNode->activeInstance = tmp->mainNode;
+
+                tmp->mainNode->numberOfChannels--;
+
+                free(tmp);
+                tmp = NULL;
+                if (canCloseChannel)
+                    deleteChannel(channel);
+                return;
+            }
+            tmp = tmp->next;
+        }
+    }
+    else
+    {
+        sprintf(message, "This channel does not exist.\n.");
+        send(root, node->mainNode, message);
+    }
 }
 
 void *clientHandler(void *info)
@@ -647,7 +745,7 @@ void *clientHandler(void *info)
                 cout << tInfo->clientNode->name << " (" << tInfo->clientNode->ip << ")"
                      << " (" << tInfo->clientNode->socket << ")"
                      << " left the server.\n";
-                sprintf(sendBuffer, "Server: %s left the server     .\n", tInfo->clientNode->name);
+                sprintf(sendBuffer, "Server: %s left the server.     \n", tInfo->clientNode->name);
                 sendAllClients(tInfo->channelRoot, tInfo->clientRoot, tInfo->clientNode, sendBuffer);
                 leave_flag = 1;
             }
@@ -662,6 +760,19 @@ void *clientHandler(void *info)
                 if (argument[0] == '&' || argument[0] == '#')
                 {
                     join(argument, tInfo->channelRoot, tInfo->clientNode);
+                }
+                else
+                {
+
+                    sprintf(message, "Incorrect name form. Channel name needs to start with '#' or '&'.\n.");
+                    send(tInfo->channelRoot, tInfo->clientNode, message);
+                }
+            }
+            else if (!strcmp(command, "/leave"))
+            {
+                if (argument[0] == '&' || argument[0] == '#')
+                {
+                    leave(tInfo->channelRoot, tInfo->clientNode, argument);
                 }
                 else
                 {
@@ -724,7 +835,7 @@ void *clientHandler(void *info)
             else if (!strcmp(command, "/help"))
             {
                 sprintf(message,
-                        "    User commands:\n/quit = quit program\n/ping = check connection\n\n    Admin commands:\n/whois username = show user's ip\n/mute username = diable user's messages on the channel\n/unmute username = enables user's messages on the channel\n/kick username = kicks user from channel\n");
+                        "    User commands:\n/quit = quit program\n/ping = check connection\n/join channelName = join a channel\n/leave channelName = leave a channel\n\n    Admin commands:\n/whois username = show user's ip\n/mute username = diable user's messages on the channel\n/unmute username = enables user's messages on the channel\n/kick username = kicks user from channel\n");
                 send(tInfo->channelRoot, tInfo->clientNode->activeInstance, message);
             }
             else
