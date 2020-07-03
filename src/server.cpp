@@ -167,7 +167,7 @@ void disconnectNode(ClientList *node, ChannelList *rootChannel)
     node = NULL;
 }
 
-void closeChannel(ChannelList *channel, ChannelList *root)
+void closeChannel(ChannelList *channel)
 {
     cout << "\nClosing channel: " << channel->name << endl;
 
@@ -179,22 +179,6 @@ void closeChannel(ChannelList *channel, ChannelList *root)
         cout << "\nRemoving " << root->name << " of channel\n";
         tmpClient = root;
         root = root->next;
-
-        // Removes channel from channel list
-        for (int i = 0; i < MAX_CHANNELS; i++)
-        {
-            if (!strcmp(tmpClient->mainNode->channels[i], channel->name))
-            {
-                tmpClient->mainNode->channels[i][0] = '\0';
-                break;
-            }
-        }
-
-        // Resets active channel and instance
-        tmpClient->mainNode->activeChannel = root;
-        tmpClient->mainNode->activeInstance = tmpClient->mainNode;
-
-        tmpClient->mainNode->numberOfChannels--;
         free(tmpClient);
         tmpClient = NULL;
     }
@@ -262,7 +246,7 @@ void *quitHandler(void *info)
         {
             while (channelRoot != NULL)
             {
-                closeChannel(channelRoot,((ThreadInfo *)info)->channelRoot);
+                closeChannel(channelRoot);
                 tmpChannel = channelRoot;
                 channelRoot = channelRoot->next;
                 free(tmpChannel);
