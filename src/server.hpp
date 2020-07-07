@@ -46,15 +46,6 @@ void disconnectNode(ClientList *node, ChannelList *rootChannel);
 void deleteChannel(ChannelList *node);
 
 /**
- * @brief  Put the newchar at the end of a string
- * @note   
- * @param  *str: string to be modified
- * @param  newchar: the new char that will be at he end of the string
- * @retval None
- */
-void str_trim(char *str, char newchar);
-
-/**
  * @brief  Closes the server
  * @note   
  * @param  *rootNode: pointer to the root of the list
@@ -124,12 +115,22 @@ void mute(ChannelList *root, ClientList *admin, char *username, bool mute);
 /**
  * @brief  Allows admin to kick a speciic user of the channel
  * @note   
- * @param  *root: poiner to the root nodeof the channels list
+ * @param  *root: pointer to the root nodeof the channels list
  * @param  *admin: pointer to the admin of the channel
- * @param  *username:  name of he user that the admin is going to kick
+ * @param  *username:  name of the user that the admin is going to kick
  * @retval None
  */
 void kick(ChannelList *root, ClientList *admin, char *username);
+
+/**
+ * @brief  Any user that is on the specified channel can leave the channel, but still connected to the server
+ * @note   
+ * @param  *root: pointer to the root nodeof the channels list
+ * @param  *node: pointer to the user that is leaving the channel
+ * @param  *channelName: name of the channel 
+ * @retval None
+ */
+void leave(ChannelList *root, ClientList *node, char *channelName);
 
 /**
  * @brief  Handles the client

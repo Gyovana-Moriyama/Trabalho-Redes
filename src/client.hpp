@@ -18,14 +18,6 @@ void quit(int sock);
  */
 void str_print_nickname();
 
-/**
- * @brief  Put the newchar at the end of a string
- * @note   
- * @param  *str: string to be modified
- * @param  newchar: the new char that will be at he end of the string
- * @retval None
- */
-void str_trim(char *str, char newchar);
 
 /**
  * @brief  Prints the received message

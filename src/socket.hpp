@@ -30,5 +30,14 @@ void errorMsg(const char *msg);
  */
 void ctrl_c_handler(int sig);
 
+/**
+ * @brief  Put the newchar at the end of a string
+ * @note   
+ * @param  *str: string to be modified
+ * @param  newchar: the new char that will be at he end of the string
+ * @retval None
+ */
+void str_trim(char *str, char newchar);
+
 
 #endif

@@ -120,21 +120,24 @@ void disconnectNode(ClientList *node, ChannelList *rootChannel)
         node->next->prev = node->prev;
     }
 
+    //checks if the user is active on any channel and if is, leaves the channel
     if (node->numberOfChannels > 0)
     {
         ChannelList *tmp = rootChannel->next;
         for (int i = 0; i < MAX_CHANNELS; i++)
         {
+            //if there is a channel
             if (node->channels[i][0] != '\0')
             {
                 while (tmp != NULL)
                 {
-
+                    //searcher for the channel in the channels list
                     if (!strcmp(node->channels[i], tmp->name))
                     {
                         ClientList *clientTmp = tmp->clients->next;
                         while (clientTmp != NULL)
                         {
+                            //search for itself in the channel's client list
                             if (!strcmp(node->name, clientTmp->name))
                             {
                                 // Removes node from channel's client list
@@ -167,6 +170,7 @@ void disconnectNode(ClientList *node, ChannelList *rootChannel)
     node = NULL;
 }
 
+//Auxiliary function that remove all the clients from a channel
 void closeChannel(ChannelList *channel)
 {
     cout << "\nClosing channel: " << channel->name << endl;
@@ -244,6 +248,7 @@ void *quitHandler(void *info)
 
         if (!strcmp(input, "/quit"))
         {
+            //closes all the open channels
             while (channelRoot != NULL)
             {
                 closeChannel(channelRoot);
@@ -253,6 +258,7 @@ void *quitHandler(void *info)
                 tmpChannel = NULL;
             }
 
+            //disconnects all the users
             while (root != NULL)
             {
                 cout << "\nClose socketfd: " << root->socket << endl;
@@ -612,6 +618,7 @@ void leave(ChannelList *root, ClientList *node, char *channelName)
 
     ChannelList *channel = root->next;
 
+    //search for the channel on the channels list
     while (channel != NULL)
     {
         if (!strcmp(channel->name, channelName))
@@ -621,12 +628,14 @@ void leave(ChannelList *root, ClientList *node, char *channelName)
 
         channel = channel->next;
     }
+
     if (channel != NULL)
     {
 
         ClientList *tmp = channel->clients->next;
         while (tmp != NULL)
         {
+            //search for client on channel's client list
             if (!strcmp(node->name, tmp->name))
             {
                 // Removes node from channel's client list

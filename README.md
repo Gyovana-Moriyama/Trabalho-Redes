@@ -16,6 +16,7 @@
 - /nickname NomeUsuario faz com que o usuário seja reconhecido pelo nome especificado
 - /ping o servidor responde com pong
 - /join NomeCanal entra no canal com o nome especificado
+- /leave NomeCanal sai do canal com o nome especificado
 - /help mostra os comandos que o usuário pode utilizar
 - /quit desconecta o cliente do servidor
 #### Administrador:
