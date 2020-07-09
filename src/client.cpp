@@ -29,7 +29,7 @@ void ctrl_c_handler(int sig)
 
 void str_print_nickname()
 {
-    printf("\r%s - %s: ", channel,nickname);
+    printf("\r%s - %s: ", channel, nickname);
     fflush(stdout);
 }
 
@@ -150,7 +150,6 @@ int main(int argc, char const *argv[])
     char buffer[MESSAGE_SIZE] = {};
     char command[MESSAGE_SIZE] = {};
 
-
     signal(SIGINT, ctrl_c_handler);
     bzero(nickname, NICKNAME_SIZE);
 
@@ -165,18 +164,17 @@ int main(int argc, char const *argv[])
             if (buffer[0] == '/')
             {
                 sscanf(buffer, "%s %s", command, nickname);
-                if(!strcmp(command, "/nickname")){
+                if (!strcmp(command, "/nickname"))
+                {
                     str_trim(nickname, '\0');
                 }
                 else
                 {
                     cout << "Invalid command.\n";
                 }
-                
             }
         }
     } while (strlen(nickname) < 1 || strlen(nickname) > NICKNAME_SIZE - 1);
-
 
     bzero(buffer, MESSAGE_SIZE);
 
@@ -187,13 +185,12 @@ int main(int argc, char const *argv[])
     bzero((char *)&server_addr, s_addrlen);
     bzero((char *)&client_addr, c_addrlen);
 
-    //setup the host_addr structure for use in bind call
     //server byte order
     server_addr.sin_family = AF_INET;
     //convert short int value from host to network byte order
     server_addr.sin_port = htons(PORT);
 
-    char ip[16] = {};
+    char ip[INET6_ADDRSTRLEN] = {};
 
     //Gets server address, it can be the default or any other valid ip
     int addr = 1;
@@ -249,11 +246,18 @@ int main(int argc, char const *argv[])
     }
 
     //Connects to server
-    if (connect(sock, (struct sockaddr *)&server_addr, s_addrlen) < 0)
+    if (connect(sock, (struct sockaddr *)&server_addr, s_addrlen) < 0){
         errorMsg("\nConnection failed\n");
+
+    }
 
     //Names
     getsockname(sock, (struct sockaddr *)&client_addr, (socklen_t *)&c_addrlen);
+<<<<<<< Updated upstream
+=======
+     //convert short int value from host to network byte order
+    client_addr.sin_port = htons(PORT);
+>>>>>>> Stashed changes
     cout << "Connect to Server: " << inet_ntoa(server_addr.sin_addr) << ": " << ntohs(server_addr.sin_port) << "\n";
     cout << "You are: " << inet_ntoa(client_addr.sin_addr) << ": " << ntohs(client_addr.sin_port) << "\n";
 

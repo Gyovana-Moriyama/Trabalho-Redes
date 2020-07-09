@@ -7,7 +7,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-#define PORT                8080
+#define PORT                9001
 #define PROTOCOL            0
 
 #define MESSAGE_SIZE        2049

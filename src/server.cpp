@@ -14,11 +14,10 @@ struct s_clientList
     int attempts;
     ClientList *prev;
     ClientList *next;
-    char ip[16];
+    char ip[INET6_ADDRSTRLEN];
     char name[NICKNAME_SIZE];
     bool isAdmin;
     bool muted;
-    // char **channels;
     char channels[MAX_CHANNELS][CHANNEL_NAME_SIZE];
     int numberOfChannels;
     ChannelList *activeChannel;
@@ -64,10 +63,8 @@ ClientList *createClient(int sock_fd, char *ip)
     newNode->mainNode = NULL;
     newNode->numberOfChannels = 0;
 
-    // newNode->channels = (char **)malloc(sizeof(char *) * MAX_CHANNELS);
     for (int i = 0; i < MAX_CHANNELS; i++)
     {
-        // newNode->channels[i] = (char *)malloc(sizeof(char) * CHANNEL_NAME_SIZE);
         newNode->channels[i][0] = '\0';
     }
 
@@ -505,7 +502,8 @@ bool whoIs(ClientList *admin, char *username)
         if (!strcmp(tmp->name, username))
         {
             //send to admin the IP osf the user
-            sprintf(buffer, "%s - User(%s): %s\n", admin->mainNode->activeChannel->name, username, tmp->ip);
+          
+                sprintf(buffer, "%s - User(%s): %s\n", admin->mainNode->activeChannel->name, username, tmp->ip);
             int snd = send(admin->socket, buffer, MESSAGE_SIZE, 0);
             if (snd < 0)
                 return false;
@@ -870,12 +868,12 @@ int main(int argc, char const *argv[])
         errorMsg("Socket failed.");
 
     //Forcefully attaching socket to the port 8080
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)))
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)))
         errorMsg("setsockopt");
 
     struct sockaddr_in server_addr, client_addr;
-    int s_addrlen = sizeof(server_addr);
-    int c_addrlen = sizeof(client_addr);
+    socklen_t s_addrlen = sizeof(server_addr);
+    socklen_t c_addrlen = sizeof(client_addr);
     bzero((char *)&server_addr, s_addrlen);
     bzero((char *)&client_addr, c_addrlen);
 
@@ -921,14 +919,13 @@ int main(int argc, char const *argv[])
     while (true)
     {
 
-        if ((client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&c_addrlen)) < 0)
+        if ((client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &c_addrlen)) < 0)
         {
             cout << "Error accepting client" << endl;
             continue;
         }
 
         //Print client IP
-        getpeername(client_fd, (struct sockaddr *)&client_addr, (socklen_t *)&c_addrlen);
         cout << "Client " << inet_ntoa(client_addr.sin_addr) << " : " << ntohs(client_addr.sin_port) << " joined.\n";
 
         //Create new client node and append to linked list
