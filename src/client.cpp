@@ -68,7 +68,8 @@ void *receiveMsgHandler(void *sock)
         {
             char message[MESSAGE_SIZE];
             sscanf(buffer, "/channel %s %[^\n]", channel, message);
-            cout << "\r" << message << " " << channel << ".\n";
+            cout << "\r" << message << " " << channel;
+            printf("%*c\n", 20, ' ');
             fflush(stdout);
 
             cout << "\r";
@@ -84,7 +85,9 @@ void *receiveMsgHandler(void *sock)
         }
         else
         {
+            str_trim(buffer, '\0');
             cout << "\r" << buffer;
+            printf("%*c\n", 20, ' ');
             fflush(stdout);
             str_print_nickname();
 
@@ -190,32 +193,34 @@ int main(int argc, char const *argv[])
     //convert short int value from host to network byte order
     server_addr.sin_port = htons(PORT);
 
-    char ip[10] = {};
+    char ip[16] = {};
 
     //Gets server address, it can be the default or any other valid ip
-    // do
-    // {
-    //     cout << "Please enter server address (default: " << DEFAULT_IP << ").\nFor default enter /default: ";
-    //     if (fgets(ip, MESSAGE_SIZE - 1, stdin) != NULL)
-    //         str_trim(ip, '\0');
+    int addr = 1;
+    do
+    {
+        // Error message for iterations that aren't the first one
+        if (addr <= 0)
+        {
+            cout << "Invalid address. ";
+        }
 
-    // } while (strlen(ip) < 8 || strlen(ip) > 9);
+        cout << "Please enter server address (default: " << DEFAULT_IP << ").\nFor default enter /default: ";
+        if (fgets(ip, MESSAGE_SIZE - 1, stdin) != NULL)
+            str_trim(ip, '\0');
 
-    int addr = 0;
+        if (!strcmp(ip, "/default"))
+        {
+            // Convert IPv4 and IPv6 addresses from text to binary form
+            addr = inet_pton(AF_INET, DEFAULT_IP, &server_addr.sin_addr);
+        }
+        else
+        {
+            // Convert IPv4 and IPv6 addresses from text to binary form
+            addr = inet_pton(AF_INET, ip, &server_addr.sin_addr);
+        }
 
-    // if (!strcmp(ip, "/default"))
-    // {
-        // Convert IPv4 and IPv6 addresses from text to binary form
-        addr = inet_pton(AF_INET, DEFAULT_IP, &server_addr.sin_addr);
-    // }
-    // else
-    // {
-        // Convert IPv4 and IPv6 addresses from text to binary form
-        // addr = inet_pton(AF_INET, ip, &server_addr.sin_addr);
-    // }
-
-    if (addr <= 0)
-        errorMsg("\nInvalid address/ Address not supported\n");
+    } while (addr <= 0);
 
     //commands menu
     cout << "Connect: /connect\nQuit: /quit\nPing: /ping\n";
@@ -249,7 +254,6 @@ int main(int argc, char const *argv[])
 
     //Names
     getsockname(sock, (struct sockaddr *)&client_addr, (socklen_t *)&c_addrlen);
-    getsockname(sock, (struct sockaddr *)&server_addr, (socklen_t *)&s_addrlen);
     cout << "Connect to Server: " << inet_ntoa(server_addr.sin_addr) << ": " << ntohs(server_addr.sin_port) << "\n";
     cout << "You are: " << inet_ntoa(client_addr.sin_addr) << ": " << ntohs(client_addr.sin_port) << "\n";
 

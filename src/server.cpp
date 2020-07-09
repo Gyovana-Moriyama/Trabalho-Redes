@@ -655,15 +655,22 @@ void leave(ChannelList *root, ClientList *node, char *channelName)
                     }
                 }
 
-                sprintf(message, "/channel #none You left the channel %s. Switched to", channel->name);
-                send(root, tmp->mainNode, message);
 
                 sprintf(message, "%s - %s left the channel.\n", channel->name, tmp->name);
                 sendAllClients(root, channel->clients, tmp->mainNode, message);
 
-                // Resets active channel and instance
-                tmp->mainNode->activeChannel = root;
-                tmp->mainNode->activeInstance = tmp->mainNode;
+                // Resets active channel and instance if the client left its active channel
+                if (!strcmp(node->mainNode->activeChannel->name, channelName))
+                {
+                    tmp->mainNode->activeChannel = root;
+                    tmp->mainNode->activeInstance = tmp->mainNode;
+
+                    sprintf(message, "/channel #none You left the channel %s. Switched to", channel->name);
+                    send(root, tmp->mainNode, message);
+                }
+        
+                sprintf(message, "You left the channel %s.", channel->name);
+                send(root, tmp->mainNode, message);
 
                 tmp->mainNode->numberOfChannels--;
 
