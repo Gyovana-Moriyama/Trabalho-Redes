@@ -223,8 +223,8 @@ void str_trim(char *str, char newchar)
     {
         return;
     }
-    //is the last character of the string is a alphabet letter, put the newchar after it
-    if (isalnum(str[n - 1]) != 0)
+    //is the last character of the string is a alphabet letter, a number or punctuation character, put the newchar after it
+    if ((isalnum(str[n - 1]) != 0) || (ispunct(str[n - 1]) != 0))
         str[n] = newchar;
     //if is not, substitue the last character
     else
@@ -502,8 +502,7 @@ bool whoIs(ClientList *admin, char *username)
         if (!strcmp(tmp->name, username))
         {
             //send to admin the IP osf the user
-          
-                sprintf(buffer, "%s - User(%s): %s\n", admin->mainNode->activeChannel->name, username, tmp->ip);
+            sprintf(buffer, "%s - User(%s): %s\n", admin->mainNode->activeChannel->name, username, tmp->ip);
             int snd = send(admin->socket, buffer, MESSAGE_SIZE, 0);
             if (snd < 0)
                 return false;
@@ -653,6 +652,10 @@ void leave(ChannelList *root, ClientList *node, char *channelName)
                     }
                 }
 
+                sprintf(message, "You left the channel %s.", channel->name);
+                send(root, tmp->mainNode, message);
+
+                tmp->mainNode->numberOfChannels--;
 
                 sprintf(message, "%s - %s left the channel.\n", channel->name, tmp->name);
                 sendAllClients(root, channel->clients, tmp->mainNode, message);
@@ -667,10 +670,6 @@ void leave(ChannelList *root, ClientList *node, char *channelName)
                     send(root, tmp->mainNode, message);
                 }
         
-                sprintf(message, "You left the channel %s.", channel->name);
-                send(root, tmp->mainNode, message);
-
-                tmp->mainNode->numberOfChannels--;
 
                 free(tmp);
                 tmp = NULL;

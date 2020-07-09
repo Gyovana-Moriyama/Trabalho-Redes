@@ -253,11 +253,8 @@ int main(int argc, char const *argv[])
 
     //Names
     getsockname(sock, (struct sockaddr *)&client_addr, (socklen_t *)&c_addrlen);
-<<<<<<< Updated upstream
-=======
      //convert short int value from host to network byte order
     client_addr.sin_port = htons(PORT);
->>>>>>> Stashed changes
     cout << "Connect to Server: " << inet_ntoa(server_addr.sin_addr) << ": " << ntohs(server_addr.sin_port) << "\n";
     cout << "You are: " << inet_ntoa(client_addr.sin_addr) << ": " << ntohs(client_addr.sin_port) << "\n";
 
