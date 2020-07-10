@@ -42,7 +42,7 @@ void str_trim(char *str, char newchar)
         return;
     }
     //is the last character of the string is a alphabet letter, put the newchar after it
-    if (isalnum(str[n - 1]) != 0)
+    if ((isalnum(str[n - 1]) != 0) || (ispunct(str[n - 1]) != 0))
         str[n] = newchar;
     //if is not, substitue the last character
     else
@@ -246,14 +246,14 @@ int main(int argc, char const *argv[])
     }
 
     //Connects to server
-    if (connect(sock, (struct sockaddr *)&server_addr, s_addrlen) < 0){
+    if (connect(sock, (struct sockaddr *)&server_addr, s_addrlen) < 0)
+    {
         errorMsg("\nConnection failed\n");
-
     }
 
     //Names
     getsockname(sock, (struct sockaddr *)&client_addr, (socklen_t *)&c_addrlen);
-     //convert short int value from host to network byte order
+    //convert short int value from host to network byte order
     client_addr.sin_port = htons(PORT);
     cout << "Connect to Server: " << inet_ntoa(server_addr.sin_addr) << ": " << ntohs(server_addr.sin_port) << "\n";
     cout << "You are: " << inet_ntoa(client_addr.sin_addr) << ": " << ntohs(client_addr.sin_port) << "\n";
